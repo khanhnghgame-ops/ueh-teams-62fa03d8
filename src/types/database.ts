@@ -1,0 +1,74 @@
+export type AppRole = 'admin' | 'leader' | 'member';
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE' | 'VERIFIED';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface Profile {
+  id: string;
+  student_id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  is_approved: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserRole {
+  id: string;
+  user_id: string;
+  role: AppRole;
+  created_at: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupMember {
+  id: string;
+  group_id: string;
+  user_id: string;
+  role: AppRole;
+  joined_at: string;
+  profiles?: Profile;
+}
+
+export interface Task {
+  id: string;
+  group_id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  deadline: string | null;
+  submission_link: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  task_assignments?: TaskAssignment[];
+  groups?: Group;
+}
+
+export interface TaskAssignment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  assigned_at: string;
+  profiles?: Profile;
+}
+
+export interface PendingApproval {
+  id: string;
+  user_id: string;
+  group_id: string;
+  status: ApprovalStatus;
+  created_at: string;
+  processed_at: string | null;
+  processed_by: string | null;
+  profiles?: Profile;
+  groups?: Group;
+}
