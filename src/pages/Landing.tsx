@@ -27,7 +27,7 @@ export default function Landing() {
             </Link>
             <Link to="/auth/admin">
               <Button variant="outline" className="font-medium border-primary-foreground/40 text-primary-foreground">
-                <Shield className="w-4 h-4 mr-2" /> Leader / Admin
+                <Shield className="w-4 h-4 mr-2" /> Leader / Nhóm phó
               </Button>
             </Link>
           </div>
@@ -85,7 +85,7 @@ export default function Landing() {
                       className="w-full text-base font-semibold px-8 border-primary/60 text-primary"
                     >
                       <Shield className="w-5 h-5 mr-2" />
-                      Dành cho Leader/Admin
+                      Dành cho Leader/Nhóm phó
                     </Button>
                   </Link>
                 </div>

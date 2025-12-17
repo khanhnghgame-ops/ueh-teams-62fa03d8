@@ -31,7 +31,7 @@ function AppRoutes() {
       {/* /auth chuyển hướng về /auth/member để tránh lỗi cũ */}
       <Route path="/auth" element={<Navigate to="/auth/member" replace />} />
       <Route path="/auth/member" element={<Auth />} />
-      <Route path="/auth/admin" element={<ProtectedRoute><AdminAuthPage /></ProtectedRoute>} />
+      <Route path="/auth/admin" element={<AdminAuthPage />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />
       <Route path="/groups/:groupId" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
