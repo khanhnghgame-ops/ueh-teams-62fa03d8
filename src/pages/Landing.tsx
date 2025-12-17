@@ -26,7 +26,7 @@ export default function Landing() {
               </Button>
             </Link>
             <Link to="/auth/admin">
-              <Button variant="outline" className="font-medium border-primary-foreground/40 text-primary-foreground">
+              <Button className="font-medium bg-orange-500 hover:bg-orange-600 text-white border-0">
                 <Shield className="w-4 h-4 mr-2" /> Leader / Nhóm phó
               </Button>
             </Link>
@@ -81,8 +81,7 @@ export default function Landing() {
                   <Link to="/auth/admin" className="w-full sm:w-auto">
                     <Button
                       size="lg"
-                      variant="outline"
-                      className="w-full text-base font-semibold px-8 border-primary/60 text-primary"
+                      className="w-full text-base font-semibold px-8 bg-orange-500 hover:bg-orange-600 text-white"
                     >
                       <Shield className="w-5 h-5 mr-2" />
                       Dành cho Leader/Nhóm phó

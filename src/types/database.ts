@@ -41,6 +41,7 @@ export interface GroupMember {
 export interface Task {
   id: string;
   group_id: string;
+  stage_id: string | null;
   title: string;
   description: string | null;
   status: TaskStatus;
@@ -71,4 +72,16 @@ export interface PendingApproval {
   processed_by: string | null;
   profiles?: Profile;
   groups?: Group;
+}
+
+export interface Stage {
+  id: string;
+  group_id: string;
+  name: string;
+  description: string | null;
+  order_index: number;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
 }

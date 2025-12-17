@@ -26,6 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -38,9 +44,11 @@ import {
   UserPlus,
   ExternalLink,
   Calendar,
-  Clock,
+  Layers,
+  FolderOpen,
+  ChevronRight,
 } from 'lucide-react';
-import type { Group, GroupMember, Task, TaskAssignment, Profile, TaskStatus } from '@/types/database';
+import type { Group, GroupMember, Task, TaskAssignment, Profile, TaskStatus, Stage } from '@/types/database';
 
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
@@ -50,9 +58,16 @@ export default function GroupDetail() {
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLeaderInGroup, setIsLeaderInGroup] = useState(false);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
+
+  // Stage dialog state
+  const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
+  const [isCreatingStage, setIsCreatingStage] = useState(false);
+  const [newStageName, setNewStageName] = useState('');
+  const [newStageDescription, setNewStageDescription] = useState('');
 
   // Task dialog state
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
@@ -61,6 +76,7 @@ export default function GroupDetail() {
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskDeadline, setNewTaskDeadline] = useState('');
   const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>([]);
+  const [newTaskStageId, setNewTaskStageId] = useState<string>('');
 
   // Member dialog state
   const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
@@ -89,6 +105,17 @@ export default function GroupDetail() {
       if (groupError) throw groupError;
       setGroup(groupData);
 
+      // Fetch stages
+      const { data: stagesData } = await supabase
+        .from('stages')
+        .select('*')
+        .eq('group_id', groupId)
+        .order('order_index', { ascending: true });
+
+      if (stagesData) {
+        setStages(stagesData);
+      }
+
       // Fetch members
       const { data: membersData } = await supabase
         .from('group_members')
@@ -96,7 +123,6 @@ export default function GroupDetail() {
         .eq('group_id', groupId);
 
       if (membersData) {
-        // Fetch profiles for members
         const userIds = membersData.map(m => m.user_id);
         const { data: profilesData } = await supabase
           .from('profiles')
@@ -124,14 +150,12 @@ export default function GroupDetail() {
         .order('created_at', { ascending: false });
 
       if (tasksData) {
-        // Fetch assignments for all tasks
         const taskIds = tasksData.map(t => t.id);
         const { data: assignmentsData } = await supabase
           .from('task_assignments')
           .select('*')
           .in('task_id', taskIds);
         
-        // Fetch profiles for assignees
         const assigneeIds = [...new Set(assignmentsData?.map(a => a.user_id) || [])];
         const { data: assigneeProfiles } = await supabase
           .from('profiles')
@@ -171,6 +195,48 @@ export default function GroupDetail() {
     }
   };
 
+  const handleCreateStage = async () => {
+    if (!newStageName.trim()) {
+      toast({
+        title: 'Lỗi',
+        description: 'Vui lòng nhập tên giai đoạn',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsCreatingStage(true);
+
+    try {
+      const { error } = await supabase.from('stages').insert({
+        group_id: groupId,
+        name: newStageName.trim(),
+        description: newStageDescription.trim() || null,
+        order_index: stages.length,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Thành công',
+        description: 'Đã tạo giai đoạn mới',
+      });
+
+      setIsStageDialogOpen(false);
+      setNewStageName('');
+      setNewStageDescription('');
+      fetchGroupData();
+    } catch (error: any) {
+      toast({
+        title: 'Lỗi',
+        description: error.message || 'Không thể tạo giai đoạn',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreatingStage(false);
+    }
+  };
+
   const handleCreateTask = async () => {
     if (!newTaskTitle.trim()) {
       toast({
@@ -191,6 +257,7 @@ export default function GroupDetail() {
           title: newTaskTitle.trim(),
           description: newTaskDescription.trim() || null,
           deadline: newTaskDeadline || null,
+          stage_id: newTaskStageId || null,
           created_by: user!.id,
         })
         .select()
@@ -198,7 +265,6 @@ export default function GroupDetail() {
 
       if (taskError) throw taskError;
 
-      // Add assignees
       if (newTaskAssignees.length > 0) {
         const assignments = newTaskAssignees.map((userId) => ({
           task_id: newTask.id,
@@ -222,6 +288,7 @@ export default function GroupDetail() {
       setNewTaskDescription('');
       setNewTaskDeadline('');
       setNewTaskAssignees([]);
+      setNewTaskStageId('');
       fetchGroupData();
     } catch (error: any) {
       toast({
@@ -338,6 +405,12 @@ export default function GroupDetail() {
     return task.status === statusFilter;
   });
 
+  const getTasksByStage = (stageId: string | null) => {
+    return filteredTasks.filter((task) => task.stage_id === stageId);
+  };
+
+  const unstagedTasks = getTasksByStage(null);
+
   const availableProfiles = allProfiles.filter(
     (p) => !members.some((m) => m.user_id === p.id)
   );
@@ -364,6 +437,60 @@ export default function GroupDetail() {
       </DashboardLayout>
     );
   }
+
+  const TaskCard = ({ task }: { task: Task }) => (
+    <Link key={task.id} to={`/groups/${groupId}/tasks/${task.id}`}>
+      <Card className="hover:shadow-md transition-shadow cursor-pointer">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-medium truncate">{task.title}</h3>
+                <Badge className={getStatusColor(task.status)}>
+                  {getStatusLabel(task.status)}
+                </Badge>
+              </div>
+              {task.description && (
+                <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
+                  {task.description}
+                </p>
+              )}
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                {task.deadline && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {new Date(task.deadline).toLocaleDateString('vi-VN')}
+                  </span>
+                )}
+                {task.submission_link && (
+                  <span className="flex items-center gap-1 text-primary">
+                    <ExternalLink className="w-3 h-3" />
+                    Đã nộp bài
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex -space-x-2">
+              {task.task_assignments?.slice(0, 3).map((assignment) => (
+                <Avatar key={assignment.id} className="w-8 h-8 border-2 border-background">
+                  <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                    {assignment.profiles
+                      ? getInitials(assignment.profiles.full_name)
+                      : '?'}
+                  </AvatarFallback>
+                </Avatar>
+              ))}
+              {(task.task_assignments?.length || 0) > 3 && (
+                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
+                  +{(task.task_assignments?.length || 0) - 3}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
 
   return (
     <DashboardLayout>
@@ -447,6 +574,55 @@ export default function GroupDetail() {
                   </DialogContent>
                 </Dialog>
 
+                <Dialog open={isStageDialogOpen} onOpenChange={setIsStageDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <Layers className="w-4 h-4 mr-2" />
+                      Tạo giai đoạn
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Tạo giai đoạn mới</DialogTitle>
+                      <DialogDescription>
+                        Tạo giai đoạn để phân loại các task trong dự án
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="stage-name">Tên giai đoạn</Label>
+                        <Input
+                          id="stage-name"
+                          placeholder="VD: Giai đoạn 1 - Nghiên cứu"
+                          value={newStageName}
+                          onChange={(e) => setNewStageName(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="stage-description">Mô tả (tùy chọn)</Label>
+                        <Textarea
+                          id="stage-description"
+                          placeholder="Mô tả chi tiết giai đoạn..."
+                          value={newStageDescription}
+                          onChange={(e) => setNewStageDescription(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsStageDialogOpen(false)}>
+                        Hủy
+                      </Button>
+                      <Button onClick={handleCreateStage} disabled={isCreatingStage}>
+                        {isCreatingStage ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          'Tạo giai đoạn'
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
                 <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
                   <DialogTrigger asChild>
                     <Button>
@@ -480,6 +656,24 @@ export default function GroupDetail() {
                           onChange={(e) => setNewTaskDescription(e.target.value)}
                         />
                       </div>
+                      {stages.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Giai đoạn (tùy chọn)</Label>
+                          <Select value={newTaskStageId} onValueChange={setNewTaskStageId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Chọn giai đoạn..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">Không thuộc giai đoạn nào</SelectItem>
+                              {stages.map((stage) => (
+                                <SelectItem key={stage.id} value={stage.id}>
+                                  {stage.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label htmlFor="task-deadline">Deadline (tùy chọn)</Label>
                         <Input
@@ -544,6 +738,10 @@ export default function GroupDetail() {
               <ListTodo className="w-4 h-4" />
               Tasks ({tasks.length})
             </TabsTrigger>
+            <TabsTrigger value="stages" className="gap-2">
+              <Layers className="w-4 h-4" />
+              Giai đoạn ({stages.length})
+            </TabsTrigger>
             <TabsTrigger value="members" className="gap-2">
               <Users className="w-4 h-4" />
               Thành viên ({members.length})
@@ -581,58 +779,98 @@ export default function GroupDetail() {
             ) : (
               <div className="space-y-3">
                 {filteredTasks.map((task) => (
-                  <Link key={task.id} to={`/groups/${groupId}/tasks/${task.id}`}>
-                    <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-medium truncate">{task.title}</h3>
-                              <Badge className={getStatusColor(task.status)}>
-                                {getStatusLabel(task.status)}
-                              </Badge>
+                  <TaskCard key={task.id} task={task} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="stages" className="mt-6">
+            {stages.length === 0 && unstagedTasks.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-16">
+                  <Layers className="w-16 h-16 text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground mb-4">Chưa có giai đoạn nào</p>
+                  {isLeaderInGroup && (
+                    <Button onClick={() => setIsStageDialogOpen(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Tạo giai đoạn đầu tiên
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {/* Staged tasks */}
+                <Accordion type="multiple" className="space-y-4" defaultValue={stages.map(s => s.id)}>
+                  {stages.map((stage) => {
+                    const stageTasks = getTasksByStage(stage.id);
+                    const completedCount = stageTasks.filter(t => t.status === 'DONE' || t.status === 'VERIFIED').length;
+                    
+                    return (
+                      <AccordionItem 
+                        key={stage.id} 
+                        value={stage.id}
+                        className="border rounded-lg bg-card"
+                      >
+                        <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <FolderOpen className="w-5 h-5 text-primary" />
                             </div>
-                            {task.description && (
-                              <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
-                                {task.description}
+                            <div className="text-left flex-1">
+                              <h3 className="font-semibold">{stage.name}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {stageTasks.length} task • {completedCount} hoàn thành
                               </p>
-                            )}
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              {task.deadline && (
-                                <span className="flex items-center gap-1">
-                                  <Calendar className="w-3 h-3" />
-                                  {new Date(task.deadline).toLocaleDateString('vi-VN')}
-                                </span>
-                              )}
-                              {task.submission_link && (
-                                <span className="flex items-center gap-1 text-primary">
-                                  <ExternalLink className="w-3 h-3" />
-                                  Đã nộp bài
-                                </span>
-                              )}
                             </div>
-                          </div>
-                          <div className="flex -space-x-2">
-                            {task.task_assignments?.slice(0, 3).map((assignment) => (
-                              <Avatar key={assignment.id} className="w-8 h-8 border-2 border-background">
-                                <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                  {assignment.profiles
-                                    ? getInitials(assignment.profiles.full_name)
-                                    : '?'}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {(task.task_assignments?.length || 0) > 3 && (
-                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
-                                +{(task.task_assignments?.length || 0) - 3}
+                            {stageTasks.length > 0 && (
+                              <div className="w-24 h-2 bg-muted rounded-full overflow-hidden mr-4">
+                                <div 
+                                  className="h-full bg-primary rounded-full transition-all"
+                                  style={{ width: `${(completedCount / stageTasks.length) * 100}%` }}
+                                />
                               </div>
                             )}
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4">
+                          {stage.description && (
+                            <p className="text-sm text-muted-foreground mb-4">{stage.description}</p>
+                          )}
+                          {stageTasks.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-4 text-center">
+                              Chưa có task nào trong giai đoạn này
+                            </p>
+                          ) : (
+                            <div className="space-y-3">
+                              {stageTasks.map((task) => (
+                                <TaskCard key={task.id} task={task} />
+                              ))}
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+
+                {/* Unstaged tasks */}
+                {unstagedTasks.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <ListTodo className="w-5 h-5" />
+                        Task chưa phân giai đoạn
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {unstagedTasks.map((task) => (
+                        <TaskCard key={task.id} task={task} />
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             )}
           </TabsContent>
