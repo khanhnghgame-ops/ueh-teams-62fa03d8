@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Users, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import uehLogo from '@/assets/ueh-logo-new.png';
 
 export default function Landing() {
   return (
@@ -10,7 +11,7 @@ export default function Landing() {
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img
-              src="https://drive.google.com/uc?export=view&id=1t7I44Dcy7W-Lbsd7cw7eEEPo3HYzZODs"
+              src={uehLogo}
               alt="UEH logo"
               className="h-8 w-auto drop-shadow-md"
               loading="lazy"
@@ -119,7 +120,7 @@ export default function Landing() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img
-                src="https://drive.google.com/uc?export=view&id=1t7I44Dcy7W-Lbsd7cw7eEEPo3HYzZODs"
+                src={uehLogo}
                 alt="UEH logo"
                 className="h-8 w-auto"
                 loading="lazy"
