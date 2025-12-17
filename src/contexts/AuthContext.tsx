@@ -12,6 +12,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isLeader: boolean;
   isApproved: boolean;
+  mustChangePassword: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, studentId: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -113,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isLeader = roles.includes('leader') || isAdmin;
   // BỎ CƠ CHẾ DUYỆT TÀI KHOẢN: tất cả user đã đăng nhập đều được xem là hợp lệ
   const isApproved = true;
+  const mustChangePassword = profile?.must_change_password ?? false;
 
   return (
     <AuthContext.Provider
@@ -125,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin,
         isLeader,
         isApproved,
+        mustChangePassword,
         signIn,
         signUp,
         signOut,

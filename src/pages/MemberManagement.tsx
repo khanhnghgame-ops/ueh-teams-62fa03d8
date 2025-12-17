@@ -29,7 +29,6 @@ export default function MemberManagement() {
   const [newEmail, setNewEmail] = useState('');
   const [newStudentId, setNewStudentId] = useState('');
   const [newFullName, setNewFullName] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [updatePassword, setUpdatePassword] = useState('');
 
   useEffect(() => {
@@ -62,19 +61,10 @@ export default function MemberManagement() {
   const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newEmail || !newStudentId || !newFullName || !newPassword) {
+    if (!newEmail || !newStudentId || !newFullName) {
       toast({
         title: 'Thiếu thông tin',
         description: 'Vui lòng điền đầy đủ thông tin',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      toast({
-        title: 'Mật khẩu quá ngắn',
-        description: 'Mật khẩu phải có ít nhất 6 ký tự',
         variant: 'destructive',
       });
       return;
@@ -86,7 +76,6 @@ export default function MemberManagement() {
       body: {
         action: 'create_member',
         email: newEmail,
-        password: newPassword,
         student_id: newStudentId,
         full_name: newFullName,
       }
@@ -105,14 +94,13 @@ export default function MemberManagement() {
 
     toast({
       title: 'Tạo thành viên thành công',
-      description: `Đã tạo tài khoản cho ${newFullName}`,
+      description: `Đã tạo tài khoản cho ${newFullName}. Mật khẩu mặc định: 123456`,
     });
 
     // Reset form
     setNewEmail('');
     setNewStudentId('');
     setNewFullName('');
-    setNewPassword('');
     setIsDialogOpen(false);
     fetchMembers();
   };
@@ -194,7 +182,7 @@ export default function MemberManagement() {
               <DialogHeader>
                 <DialogTitle>Thêm thành viên mới</DialogTitle>
                 <DialogDescription>
-                  Tạo tài khoản cho thành viên mới. Thành viên sẽ dùng thông tin này để đăng nhập.
+                  Tạo tài khoản cho thành viên mới. Mật khẩu mặc định là "123456", thành viên sẽ được yêu cầu đổi mật khẩu khi đăng nhập lần đầu.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreateMember} className="space-y-4">
@@ -238,19 +226,11 @@ export default function MemberManagement() {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Mật khẩu ban đầu</Label>
-                  <div className="relative">
-                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Tối thiểu 6 ký tự"
-                      className="pl-10"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                    />
-                  </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    <Key className="w-4 h-4 inline mr-1" />
+                    Mật khẩu mặc định: <span className="font-mono font-bold">123456</span>
+                  </p>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>

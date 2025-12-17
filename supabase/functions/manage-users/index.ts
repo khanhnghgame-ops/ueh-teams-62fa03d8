@@ -6,8 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const DEFAULT_PASSWORD = "123456";
+
 interface CreateMemberRequest {
-  action: "create_member" | "setup_system_accounts" | "update_password";
+  action: "create_member" | "setup_system_accounts" | "update_password" | "clear_must_change_password";
   email?: string;
   password?: string;
   student_id?: string;
@@ -55,6 +57,7 @@ serve(async (req: Request) => {
           student_id: "31241570562",
           full_name: "Nguyễn Hoàng Khánh (Leader)",
           is_approved: true,
+          must_change_password: false,
         }, { onConflict: "id" });
         
         // Ensure admin role
@@ -80,6 +83,7 @@ serve(async (req: Request) => {
             student_id: "31241570562",
             full_name: "Nguyễn Hoàng Khánh (Leader)",
             is_approved: true,
+            must_change_password: false,
           }, { onConflict: "id" });
           
           await supabaseAdmin.from("user_roles").insert({
@@ -109,6 +113,7 @@ serve(async (req: Request) => {
           student_id: "DEPUTY001",
           full_name: "Nhóm phó",
           is_approved: true,
+          must_change_password: false,
         }, { onConflict: "id" });
         
         await supabaseAdmin.from("user_roles").upsert({
@@ -132,6 +137,7 @@ serve(async (req: Request) => {
             student_id: "DEPUTY001",
             full_name: "Nhóm phó",
             is_approved: true,
+            must_change_password: false,
           }, { onConflict: "id" });
           
           await supabaseAdmin.from("user_roles").insert({
@@ -148,19 +154,19 @@ serve(async (req: Request) => {
     }
 
     if (body.action === "create_member") {
-      const { email, password, student_id, full_name } = body;
+      const { email, student_id, full_name } = body;
       
-      if (!email || !password || !student_id || !full_name) {
+      if (!email || !student_id || !full_name) {
         return new Response(JSON.stringify({ error: "Missing required fields" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Create user in auth
+      // Create user in auth with DEFAULT PASSWORD
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
-        password,
+        password: DEFAULT_PASSWORD,
         email_confirm: true,
         user_metadata: { student_id, full_name }
       });
@@ -174,13 +180,14 @@ serve(async (req: Request) => {
       }
 
       if (newUser.user) {
-        // Create profile
+        // Create profile with must_change_password = true
         await supabaseAdmin.from("profiles").upsert({
           id: newUser.user.id,
           email,
           student_id,
           full_name,
           is_approved: true,
+          must_change_password: true,
         }, { onConflict: "id" });
 
         // Assign member role
@@ -189,7 +196,7 @@ serve(async (req: Request) => {
           role: "member",
         });
 
-        console.log("Member created successfully:", email);
+        console.log("Member created successfully with default password:", email);
       }
 
       return new Response(JSON.stringify({ success: true, user: newUser.user }), {
@@ -217,6 +224,30 @@ serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Clear must_change_password flag after password update
+      await supabaseAdmin.from("profiles").update({
+        must_change_password: false,
+      }).eq("id", user_id);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.action === "clear_must_change_password") {
+      const { user_id } = body;
+      
+      if (!user_id) {
+        return new Response(JSON.stringify({ error: "Missing user_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      await supabaseAdmin.from("profiles").update({
+        must_change_password: false,
+      }).eq("id", user_id);
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

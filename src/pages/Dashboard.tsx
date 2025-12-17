@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import ChangePasswordDialog from '@/components/ChangePasswordDialog';
 import {
   ListTodo,
   Clock,
@@ -27,7 +28,7 @@ interface TaskStats {
 }
 
 export default function Dashboard() {
-  const { user, profile, isApproved } = useAuth();
+  const { user, profile, isApproved, mustChangePassword, refreshProfile } = useAuth();
   const [stats, setStats] = useState<TaskStats>({
     total: 0,
     todo: 0,
@@ -143,6 +144,15 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
+      {/* Password change dialog for first login */}
+      {user && mustChangePassword && (
+        <ChangePasswordDialog 
+          open={mustChangePassword} 
+          userId={user.id} 
+          onPasswordChanged={refreshProfile} 
+        />
+      )}
+      
       <div className="space-y-6">
         {/* Welcome */}
         <div>
