@@ -16,7 +16,7 @@ export default function AdminAuthPage() {
             </Button>
           </Link>
           <span className="hidden sm:inline font-heading text-sm text-muted-foreground">
-            TaskFlow UEH - Leader/Admin
+            TaskFlow UEH - Leader/Nhóm phó
           </span>
         </div>
       </header>
