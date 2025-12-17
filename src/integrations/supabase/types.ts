@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action: string
+          action_type: string
+          created_at: string
+          description: string | null
+          group_id: string | null
+          id: string
+          metadata: Json | null
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          action: string
+          action_type: string
+          created_at?: string
+          description?: string | null
+          group_id?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          action?: string
+          action_type?: string
+          created_at?: string
+          description?: string | null
+          group_id?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_members: {
         Row: {
           group_id: string
