@@ -12,6 +12,7 @@ import GroupDetail from "./pages/GroupDetail";
 import TaskDetail from "./pages/TaskDetail";
 import MyTasks from "./pages/MyTasks";
 import AdminUsers from "./pages/AdminUsers";
+import MemberManagement from "./pages/MemberManagement";
 import NotFound from "./pages/NotFound";
 import AdminAuthPage from "./pages/AdminAuthPage";
 
@@ -38,7 +39,7 @@ function AppRoutes() {
       <Route path="/groups/:groupId/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
       <Route path="/tasks" element={<ProtectedRoute><MyTasks /></ProtectedRoute>} />
       <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/members" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
+      <Route path="/admin/members" element={<ProtectedRoute><MemberManagement /></ProtectedRoute>} />
       <Route path="/admin/approvals" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
       <Route path="/admin/tasks" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
       <Route path="/admin/scores" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
