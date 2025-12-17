@@ -37,6 +37,7 @@ import {
   ChevronDown,
   Shield,
 } from 'lucide-react';
+import uehLogo from '@/assets/ueh-logo.png';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -116,9 +117,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <Sidebar className="border-r">
           <SidebarHeader className="p-4">
             <Link to="/dashboard" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center">
-                <Users className="w-6 h-6 text-sidebar-primary-foreground" />
-              </div>
+              <img src={uehLogo} alt="UEH Logo" className="h-10 w-auto" />
               <span className="font-bold text-lg text-sidebar-foreground">TaskFlow</span>
             </Link>
           </SidebarHeader>

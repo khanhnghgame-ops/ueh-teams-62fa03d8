@@ -15,6 +15,7 @@ import AdminUsers from "./pages/AdminUsers";
 import MemberManagement from "./pages/MemberManagement";
 import NotFound from "./pages/NotFound";
 import AdminAuthPage from "./pages/AdminAuthPage";
+import AdminActivity from "./pages/AdminActivity";
 
 const queryClient = new QueryClient();
 
@@ -45,7 +46,7 @@ function AppRoutes() {
       <Route path="/admin/scores" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
       <Route path="/admin/groups" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
       <Route path="/admin/accounts" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/activity" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
+      <Route path="/admin/activity" element={<ProtectedRoute><AdminActivity /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
