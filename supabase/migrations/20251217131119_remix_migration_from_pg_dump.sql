@@ -218,6 +218,23 @@ $$;
 SET default_table_access_method = heap;
 
 --
+-- Name: activity_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.activity_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    user_name text NOT NULL,
+    action text NOT NULL,
+    action_type text NOT NULL,
+    description text,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    group_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: group_members; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -297,7 +314,8 @@ CREATE TABLE public.profiles (
     avatar_url text,
     is_approved boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    must_change_password boolean DEFAULT false NOT NULL
 );
 
 
@@ -393,6 +411,14 @@ CREATE TABLE public.user_roles (
     role public.app_role NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: activity_logs activity_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.activity_logs
+    ADD CONSTRAINT activity_logs_pkey PRIMARY KEY (id);
 
 
 --
@@ -540,6 +566,34 @@ ALTER TABLE ONLY public.user_roles
 
 
 --
+-- Name: idx_activity_logs_action_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_activity_logs_action_type ON public.activity_logs USING btree (action_type);
+
+
+--
+-- Name: idx_activity_logs_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_activity_logs_created_at ON public.activity_logs USING btree (created_at DESC);
+
+
+--
+-- Name: idx_activity_logs_group_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_activity_logs_group_id ON public.activity_logs USING btree (group_id);
+
+
+--
+-- Name: idx_activity_logs_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_activity_logs_user_id ON public.activity_logs USING btree (user_id);
+
+
+--
 -- Name: profiles on_profile_created_check_admin; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -586,6 +640,14 @@ CREATE TRIGGER update_task_scores_updated_at BEFORE UPDATE ON public.task_scores
 --
 
 CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: activity_logs activity_logs_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.activity_logs
+    ADD CONSTRAINT activity_logs_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id) ON DELETE SET NULL;
 
 
 --
@@ -764,6 +826,13 @@ CREATE POLICY "Assignees can insert submissions" ON public.submission_history FO
 
 
 --
+-- Name: tasks Assignees can update task status and submission; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Assignees can update task status and submission" ON public.tasks FOR UPDATE USING (public.is_task_assignee(auth.uid(), id)) WITH CHECK (public.is_task_assignee(auth.uid(), id));
+
+
+--
 -- Name: groups Group leaders can delete groups; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -835,6 +904,27 @@ CREATE POLICY "Leaders and admins can create groups" ON public.groups FOR INSERT
 
 
 --
+-- Name: activity_logs Leaders and admins can delete activity logs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Leaders and admins can delete activity logs" ON public.activity_logs FOR DELETE USING ((public.is_admin(auth.uid()) OR public.has_role(auth.uid(), 'leader'::public.app_role)));
+
+
+--
+-- Name: activity_logs Leaders and admins can insert activity logs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Leaders and admins can insert activity logs" ON public.activity_logs FOR INSERT WITH CHECK ((public.is_admin(auth.uid()) OR public.has_role(auth.uid(), 'leader'::public.app_role) OR (user_id = auth.uid())));
+
+
+--
+-- Name: activity_logs Leaders and admins can view activity logs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Leaders and admins can view activity logs" ON public.activity_logs FOR SELECT USING ((public.is_admin(auth.uid()) OR public.has_role(auth.uid(), 'leader'::public.app_role)));
+
+
+--
 -- Name: tasks Leaders can create tasks; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -900,7 +990,7 @@ CREATE POLICY "Leaders can process approval requests" ON public.pending_approval
 -- Name: tasks Leaders can update all task fields; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Leaders can update all task fields" ON public.tasks FOR UPDATE TO authenticated USING (public.is_group_leader(auth.uid(), group_id));
+CREATE POLICY "Leaders can update all task fields" ON public.tasks FOR UPDATE USING (public.is_group_leader(auth.uid(), group_id));
 
 
 --
@@ -965,6 +1055,12 @@ CREATE POLICY "Users can view own approval requests" ON public.pending_approvals
 
 CREATE POLICY "Users can view own roles" ON public.user_roles FOR SELECT TO authenticated USING (((user_id = auth.uid()) OR public.is_admin(auth.uid())));
 
+
+--
+-- Name: activity_logs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: group_members; Type: ROW SECURITY; Schema: public; Owner: -
