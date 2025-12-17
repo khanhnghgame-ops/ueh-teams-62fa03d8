@@ -50,7 +50,6 @@ const navigation = [
 
 const adminNavigation = [
   { name: 'Quản lý thành viên', href: '/admin/members', icon: Users },
-  { name: 'Yêu cầu tham gia', href: '/admin/approvals', icon: Shield },
   { name: 'Quản lý task', href: '/admin/tasks', icon: ListTodo },
   { name: 'Điểm & giai đoạn', href: '/admin/scores', icon: LayoutDashboard },
   { name: 'Quản lý nhóm', href: '/admin/groups', icon: FolderKanban },
