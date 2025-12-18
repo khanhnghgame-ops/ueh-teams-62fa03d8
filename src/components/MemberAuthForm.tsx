@@ -7,12 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { UEHLogo } from '@/components/UEHLogo';
-import { Loader2, Mail, Lock, Users } from 'lucide-react';
+import { Loader2, Hash, Lock, Users } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 
 const loginSchema = z.object({
-  identifier: z.string().min(1, 'Vui lòng nhập Email UEH hoặc MSSV'),
+  identifier: z.string().min(1, 'Vui lòng nhập Mã số sinh viên'),
   password: z.string().min(6, 'Mật khẩu tối thiểu 6 ký tự'),
 });
 
@@ -101,7 +101,7 @@ export function MemberAuthForm() {
         title: 'Đăng nhập thất bại',
         description:
           error.message === 'Invalid login credentials'
-            ? 'Email/MSSV hoặc mật khẩu không đúng'
+            ? 'MSSV hoặc mật khẩu không đúng'
             : error.message,
         variant: 'destructive',
       });
@@ -126,19 +126,19 @@ export function MemberAuthForm() {
         <CardHeader className="text-center pb-2">
           <CardTitle className="font-heading text-2xl">Đăng nhập thành viên</CardTitle>
           <CardDescription>
-            Dành cho thành viên đã được Leader/Nhóm phó thêm vào hệ thống
+            Đăng nhập bằng Mã số sinh viên (MSSV)
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="login-identifier">Email UEH hoặc MSSV</Label>
+              <Label htmlFor="login-identifier">Mã số sinh viên (MSSV)</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="login-identifier"
                   type="text"
-                  placeholder="email@ueh.edu.vn hoặc MSSV"
+                  placeholder="31241234567"
                   className="pl-10"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}

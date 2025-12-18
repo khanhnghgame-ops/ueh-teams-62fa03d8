@@ -36,8 +36,10 @@ import {
   LogOut,
   ChevronDown,
   Shield,
+  Key,
 } from 'lucide-react';
 import uehLogo from '@/assets/ueh-logo-new.png';
+import UserChangePasswordDialog from '@/components/UserChangePasswordDialog';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -63,6 +65,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const { profile, isAdmin, isLeader, signOut, refreshProfile } = useAuth();
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [studentId, setStudentId] = useState(profile?.student_id || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -176,35 +179,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 h-auto py-3"
-                  onClick={() => {
-                    setFullName(profile?.full_name || '');
-                    setStudentId(profile?.student_id || '');
-                    setIsProfileDialogOpen(true);
-                  }}
+                  className="w-full justify-start gap-3 h-auto py-3 px-2"
                 >
-                  <Avatar className="h-8 w-8">
+                  <Avatar className="h-8 w-8 flex-shrink-0">
                     <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-sm">
                       {profile ? getInitials(profile.full_name) : '?'}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium truncate text-sidebar-foreground">
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-medium truncate text-sidebar-foreground max-w-[140px]">
                       {profile?.full_name || 'Đang tải...'}
                     </p>
-                    <p className="text-xs text-sidebar-foreground/70">
+                    <p className="text-xs text-sidebar-foreground/70 truncate max-w-[140px]">
                       {profile?.student_id}
                     </p>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-sidebar-foreground/70" />
+                  <ChevronDown className="w-4 h-4 flex-shrink-0 text-sidebar-foreground/70" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="flex flex-col items-start">
-                  <span className="font-medium">{profile?.full_name}</span>
-                  <span className="text-xs text-muted-foreground">{profile?.email}</span>
+                  <span className="font-medium truncate max-w-full">{profile?.full_name}</span>
+                  <span className="text-xs text-muted-foreground truncate max-w-full">{profile?.email}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <span className="text-xs">
@@ -212,6 +210,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setIsChangePasswordOpen(true)}>
+                  <Key className="w-4 h-4 mr-2" />
+                  Đổi mật khẩu
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                   <LogOut className="w-4 h-4 mr-2" />
                   Đăng xuất
@@ -230,6 +232,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </main>
         </SidebarInset>
       </div>
+
+      {/* Change Password Dialog */}
+      <UserChangePasswordDialog 
+        open={isChangePasswordOpen} 
+        onOpenChange={setIsChangePasswordOpen} 
+      />
     </SidebarProvider>
   );
 }
