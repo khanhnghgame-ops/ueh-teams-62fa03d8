@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, UserPlus, Users, Trash2, Key, Mail, Hash, User } from 'lucide-react';
+import { Loader2, UserPlus, Users, Trash2, Key, Mail, Hash, User, Pencil } from 'lucide-react';
 import type { Profile } from '@/types/database';
 
 export default function MemberManagement() {
@@ -23,6 +24,8 @@ export default function MemberManagement() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Profile | null>(null);
   
   // Form state
@@ -30,6 +33,11 @@ export default function MemberManagement() {
   const [newStudentId, setNewStudentId] = useState('');
   const [newFullName, setNewFullName] = useState('');
   const [updatePassword, setUpdatePassword] = useState('');
+  
+  // Edit form state
+  const [editFullName, setEditFullName] = useState('');
+  const [editStudentId, setEditStudentId] = useState('');
+  const [editEmail, setEditEmail] = useState('');
 
   useEffect(() => {
     if (!authLoading && !isAdmin && !isLeader) {
@@ -152,6 +160,114 @@ export default function MemberManagement() {
     setIsPasswordDialogOpen(false);
   };
 
+  const handleEditMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedMember) return;
+
+    if (!editFullName.trim() || !editStudentId.trim()) {
+      toast({
+        title: 'Thiếu thông tin',
+        description: 'Vui lòng điền đầy đủ thông tin',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsCreating(true);
+
+    // Update profile in database
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        full_name: editFullName.trim(),
+        student_id: editStudentId.trim(),
+      })
+      .eq('id', selectedMember.id);
+
+    // Update email in auth if changed
+    if (editEmail.trim() !== selectedMember.email) {
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: {
+          action: 'update_email',
+          user_id: selectedMember.id,
+          email: editEmail.trim(),
+        }
+      });
+
+      if (error || data?.error) {
+        setIsCreating(false);
+        toast({
+          title: 'Cập nhật email thất bại',
+          description: data?.error || error?.message || 'Có lỗi xảy ra',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    setIsCreating(false);
+
+    if (profileError) {
+      toast({
+        title: 'Cập nhật thất bại',
+        description: profileError.message || 'Có lỗi xảy ra',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    toast({
+      title: 'Cập nhật thành công',
+      description: `Đã cập nhật thông tin cho ${editFullName}`,
+    });
+
+    setSelectedMember(null);
+    setIsEditDialogOpen(false);
+    fetchMembers();
+  };
+
+  const handleDeleteMember = async () => {
+    if (!selectedMember) return;
+
+    setIsCreating(true);
+
+    const { data, error } = await supabase.functions.invoke('manage-users', {
+      body: {
+        action: 'delete_user',
+        user_id: selectedMember.id,
+      }
+    });
+
+    setIsCreating(false);
+
+    if (error || data?.error) {
+      toast({
+        title: 'Xóa thành viên thất bại',
+        description: data?.error || error?.message || 'Có lỗi xảy ra',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    toast({
+      title: 'Xóa thành công',
+      description: `Đã xóa thành viên ${selectedMember.full_name}`,
+    });
+
+    setSelectedMember(null);
+    setIsDeleteDialogOpen(false);
+    fetchMembers();
+  };
+
+  const openEditDialog = (member: Profile) => {
+    setSelectedMember(member);
+    setEditFullName(member.full_name);
+    setEditStudentId(member.student_id);
+    setEditEmail(member.email);
+    setIsEditDialogOpen(true);
+  };
+
   if (authLoading || isLoading) {
     return (
       <DashboardLayout>
@@ -168,7 +284,7 @@ export default function MemberManagement() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-heading font-bold">Quản lý thành viên</h1>
-            <p className="text-muted-foreground">Thêm, quản lý và phân quyền thành viên trong hệ thống</p>
+            <p className="text-muted-foreground">Thêm, chỉnh sửa, xóa và phân quyền thành viên trong hệ thống</p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -283,7 +399,15 @@ export default function MemberManagement() {
                       <TableCell>
                         {new Date(member.created_at).toLocaleDateString('vi-VN')}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(member)}
+                        >
+                          <Pencil className="w-4 h-4 mr-1" />
+                          Sửa
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -294,6 +418,18 @@ export default function MemberManagement() {
                         >
                           <Key className="w-4 h-4 mr-1" />
                           Đổi MK
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => {
+                            setSelectedMember(member);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Xóa
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -340,6 +476,94 @@ export default function MemberManagement() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Member Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Chỉnh sửa thành viên</DialogTitle>
+              <DialogDescription>
+                Cập nhật thông tin cho {selectedMember?.full_name}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditMember} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="editFullName">Họ và tên</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="editFullName"
+                    placeholder="Nguyễn Văn A"
+                    className="pl-10"
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editStudentId">Mã số sinh viên</Label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="editStudentId"
+                    placeholder="31241234567"
+                    className="pl-10"
+                    value={editStudentId}
+                    onChange={(e) => setEditStudentId(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editEmail">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="editEmail"
+                    type="email"
+                    placeholder="email@ueh.edu.vn"
+                    className="pl-10"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Hủy
+                </Button>
+                <Button type="submit" disabled={isCreating}>
+                  {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pencil className="w-4 h-4 mr-2" />}
+                  Cập nhật
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Xác nhận xóa thành viên</AlertDialogTitle>
+              <AlertDialogDescription>
+                Bạn có chắc chắn muốn xóa thành viên <strong>{selectedMember?.full_name}</strong>?
+                <br />
+                Hành động này không thể hoàn tác và sẽ xóa toàn bộ dữ liệu liên quan đến thành viên này.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Hủy</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteMember}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isCreating}
+              >
+                {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                Xóa thành viên
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );

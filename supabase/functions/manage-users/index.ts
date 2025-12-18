@@ -9,7 +9,7 @@ const corsHeaders = {
 const DEFAULT_PASSWORD = "123456";
 
 interface CreateMemberRequest {
-  action: "create_member" | "setup_system_accounts" | "update_password" | "clear_must_change_password";
+  action: "create_member" | "setup_system_accounts" | "update_password" | "clear_must_change_password" | "delete_user" | "update_email";
   email?: string;
   password?: string;
   student_id?: string;
@@ -249,6 +249,68 @@ serve(async (req: Request) => {
         must_change_password: false,
       }).eq("id", user_id);
 
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.action === "delete_user") {
+      const { user_id } = body;
+      
+      if (!user_id) {
+        return new Response(JSON.stringify({ error: "Missing user_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Delete user from auth (this will cascade to profiles due to ON DELETE CASCADE)
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(user_id);
+
+      if (error) {
+        console.error("Delete user error:", error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.log("User deleted successfully:", user_id);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.action === "update_email") {
+      const { user_id, email } = body;
+      
+      if (!user_id || !email) {
+        return new Response(JSON.stringify({ error: "Missing user_id or email" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Update email in auth
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
+        email,
+        email_confirm: true,
+      });
+
+      if (authError) {
+        console.error("Update email error:", authError);
+        return new Response(JSON.stringify({ error: authError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Update email in profiles
+      await supabaseAdmin.from("profiles").update({
+        email,
+      }).eq("id", user_id);
+
+      console.log("Email updated successfully:", user_id, email);
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
