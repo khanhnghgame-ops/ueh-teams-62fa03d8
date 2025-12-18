@@ -63,8 +63,8 @@ export default function Landing() {
                 </div>
 
                 <h1 className="font-heading text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
-                  Quản lý công việc{' '}
-                  <span className="text-gradient">nhóm hiệu quả</span>
+                  Effective Team{' '}
+                  <span className="text-gradient">Task Management System</span>
                 </h1>
 
                 <p className="text-lg text-muted-foreground max-w-lg">

@@ -623,7 +623,16 @@ export default function GroupDetail() {
                   </DialogContent>
                 </Dialog>
 
-                <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
+                <Dialog 
+                  open={isTaskDialogOpen} 
+                  onOpenChange={(open) => {
+                    setIsTaskDialogOpen(open);
+                    if (open && stages.length > 0) {
+                      // Auto-select giai đoạn đầu tiên khi mở dialog
+                      setNewTaskStageId(stages[0].id);
+                    }
+                  }}
+                >
                   <DialogTrigger asChild>
                     <Button>
                       <Plus className="w-4 h-4 mr-2" />
@@ -658,13 +667,12 @@ export default function GroupDetail() {
                       </div>
                       {stages.length > 0 && (
                         <div className="space-y-2">
-                          <Label>Giai đoạn (tùy chọn)</Label>
+                          <Label>Giai đoạn</Label>
                           <Select value={newTaskStageId} onValueChange={setNewTaskStageId}>
                             <SelectTrigger>
                               <SelectValue placeholder="Chọn giai đoạn..." />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Không thuộc giai đoạn nào</SelectItem>
                               {stages.map((stage) => (
                                 <SelectItem key={stage.id} value={stage.id}>
                                   {stage.name}
@@ -672,6 +680,9 @@ export default function GroupDetail() {
                               ))}
                             </SelectContent>
                           </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Task sẽ được gán vào giai đoạn này. Bạn có thể chỉnh sửa sau.
+                          </p>
                         </div>
                       )}
                       <div className="space-y-2">

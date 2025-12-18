@@ -49,22 +49,44 @@ export function MemberAuthForm() {
     setIsLoading(true);
 
     // Tìm email từ MSSV nếu không phải email
-    let email = identifier;
+    let email = identifier.trim();
 
     if (!identifier.includes('@')) {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('student_id', identifier)
-        .maybeSingle();
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('student_id', identifier.trim())
+          .maybeSingle();
 
-      if (profileData?.email) {
-        email = profileData.email;
-      } else {
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          setIsLoading(false);
+          toast({
+            title: 'Lỗi hệ thống',
+            description: 'Không thể kiểm tra MSSV. Vui lòng thử đăng nhập bằng email.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        if (profileData?.email) {
+          email = profileData.email;
+        } else {
+          setIsLoading(false);
+          toast({
+            title: 'Tài khoản không tồn tại',
+            description: 'MSSV này chưa được Leader/Nhóm phó thêm vào hệ thống.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      } catch (err) {
+        console.error('Exception fetching profile:', err);
         setIsLoading(false);
         toast({
-          title: 'Tài khoản không tồn tại',
-          description: 'MSSV này chưa được Leader/Nhóm phó thêm vào hệ thống.',
+          title: 'Lỗi hệ thống',
+          description: 'Không thể kiểm tra MSSV. Vui lòng thử đăng nhập bằng email.',
           variant: 'destructive',
         });
         return;
