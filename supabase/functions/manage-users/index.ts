@@ -16,6 +16,7 @@ interface CreateMemberRequest {
   full_name?: string;
   role?: "member" | "leader" | "admin";
   user_id?: string;
+  requester_id?: string;
 }
 
 serve(async (req: Request) => {
@@ -205,13 +206,29 @@ serve(async (req: Request) => {
     }
 
     if (body.action === "update_password") {
-      const { user_id, password } = body;
+      const { user_id, password, requester_id } = body;
       
       if (!user_id || !password) {
         return new Response(JSON.stringify({ error: "Missing user_id or password" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+
+      // Check if requester has permission to update this user's password
+      if (requester_id) {
+        // Check if target user is an admin
+        const { data: targetIsAdmin } = await supabaseAdmin.rpc('is_admin', { _user_id: user_id });
+        // Check if requester is an admin
+        const { data: requesterIsAdmin } = await supabaseAdmin.rpc('is_admin', { _user_id: requester_id });
+        
+        // If target is admin and requester is not admin, deny
+        if (targetIsAdmin && !requesterIsAdmin) {
+          return new Response(JSON.stringify({ error: "Bạn không có quyền đổi mật khẩu của Leader" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
       const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
@@ -255,13 +272,29 @@ serve(async (req: Request) => {
     }
 
     if (body.action === "delete_user") {
-      const { user_id } = body;
+      const { user_id, requester_id } = body;
       
       if (!user_id) {
         return new Response(JSON.stringify({ error: "Missing user_id" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+
+      // Check if requester has permission to delete this user
+      if (requester_id) {
+        // Check if target user is an admin
+        const { data: targetIsAdmin } = await supabaseAdmin.rpc('is_admin', { _user_id: user_id });
+        // Check if requester is an admin
+        const { data: requesterIsAdmin } = await supabaseAdmin.rpc('is_admin', { _user_id: requester_id });
+        
+        // If target is admin and requester is not admin, deny
+        if (targetIsAdmin && !requesterIsAdmin) {
+          return new Response(JSON.stringify({ error: "Bạn không có quyền xóa Leader" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
       // Delete user from auth (this will cascade to profiles due to ON DELETE CASCADE)
