@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { MemberAuthForm } from '@/components/MemberAuthForm';
+import { AuthForm } from '@/components/AuthForm';
 
 export default function Auth() {
   return (
@@ -16,14 +16,14 @@ export default function Auth() {
             </Button>
           </Link>
           <span className="hidden sm:inline font-heading text-sm text-muted-foreground">
-            TaskFlow UEH - Thành viên
+            TaskFlow UEH
           </span>
         </div>
       </header>
 
       {/* Main */}
       <main className="flex-1 flex items-center justify-center p-4">
-        <MemberAuthForm />
+        <AuthForm />
       </main>
 
       {/* Footer */}
