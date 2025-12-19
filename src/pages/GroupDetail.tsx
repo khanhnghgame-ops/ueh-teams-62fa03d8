@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import GroupDashboard from '@/components/GroupDashboard';
+import GroupInfoCard from '@/components/GroupInfoCard';
+import StageManagement from '@/components/StageManagement';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +22,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -46,16 +59,27 @@ import {
   Calendar,
   Layers,
   FolderOpen,
-  ChevronRight,
+  LayoutDashboard,
+  Trash2,
+  Settings,
 } from 'lucide-react';
 import type { Group, GroupMember, Task, TaskAssignment, Profile, TaskStatus, Stage } from '@/types/database';
 
+interface ExtendedGroup extends Group {
+  class_code: string | null;
+  instructor_name: string | null;
+  instructor_email: string | null;
+  zalo_link: string | null;
+  additional_info: string | null;
+}
+
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
+  const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
   const { toast } = useToast();
 
-  const [group, setGroup] = useState<Group | null>(null);
+  const [group, setGroup] = useState<ExtendedGroup | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
@@ -84,6 +108,11 @@ export default function GroupDetail() {
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedRole, setSelectedRole] = useState<'member' | 'leader'>('member');
 
+  // Delete group dialog state
+  const [isDeleteGroupDialogOpen, setIsDeleteGroupDialogOpen] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -103,7 +132,7 @@ export default function GroupDetail() {
         .single();
 
       if (groupError) throw groupError;
-      setGroup(groupData);
+      setGroup(groupData as ExtendedGroup);
 
       // Fetch stages
       const { data: stagesData } = await supabase
@@ -136,10 +165,11 @@ export default function GroupDetail() {
         })) as GroupMember[];
         
         setMembers(membersWithProfiles);
+        
+        // Leader and Deputy (leader role in group) have equal permissions
         const myMembership = membersData.find((m) => m.user_id === user?.id);
-        setIsLeaderInGroup(
-          myMembership?.role === 'leader' || myMembership?.role === 'admin' || isAdmin
-        );
+        const hasLeaderRole = myMembership?.role === 'leader' || myMembership?.role === 'admin';
+        setIsLeaderInGroup(hasLeaderRole || isAdmin);
       }
 
       // Fetch tasks
@@ -247,6 +277,16 @@ export default function GroupDetail() {
       return;
     }
 
+    // Task must belong to a stage if stages exist
+    if (stages.length > 0 && !newTaskStageId) {
+      toast({
+        title: 'Lỗi',
+        description: 'Vui lòng chọn giai đoạn cho task',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsCreatingTask(true);
 
     try {
@@ -344,6 +384,71 @@ export default function GroupDetail() {
       });
     } finally {
       setIsAddingMember(false);
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (deleteConfirmText !== group?.name) {
+      toast({
+        title: 'Lỗi',
+        description: 'Vui lòng nhập đúng tên nhóm để xác nhận',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsDeletingGroup(true);
+
+    try {
+      // Delete all related data in order
+      // 1. Delete task assignments
+      const taskIds = tasks.map(t => t.id);
+      if (taskIds.length > 0) {
+        await supabase.from('task_assignments').delete().in('task_id', taskIds);
+        await supabase.from('task_scores').delete().in('task_id', taskIds);
+        await supabase.from('submission_history').delete().in('task_id', taskIds);
+      }
+      
+      // 2. Delete tasks
+      await supabase.from('tasks').delete().eq('group_id', groupId);
+      
+      // 3. Delete stage scores
+      const stageIds = stages.map(s => s.id);
+      if (stageIds.length > 0) {
+        await supabase.from('member_stage_scores').delete().in('stage_id', stageIds);
+      }
+      
+      // 4. Delete stages
+      await supabase.from('stages').delete().eq('group_id', groupId);
+      
+      // 5. Delete pending approvals
+      await supabase.from('pending_approvals').delete().eq('group_id', groupId);
+      
+      // 6. Delete group members
+      await supabase.from('group_members').delete().eq('group_id', groupId);
+      
+      // 7. Delete activity logs
+      await supabase.from('activity_logs').delete().eq('group_id', groupId);
+      
+      // 8. Finally delete the group
+      const { error } = await supabase.from('groups').delete().eq('id', groupId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Thành công',
+        description: 'Đã xóa nhóm và toàn bộ dữ liệu liên quan',
+      });
+
+      navigate('/groups');
+    } catch (error: any) {
+      toast({
+        title: 'Lỗi',
+        description: error.message || 'Không thể xóa nhóm',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeletingGroup(false);
     }
   };
 
@@ -554,9 +659,12 @@ export default function GroupDetail() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="member">Member</SelectItem>
-                            <SelectItem value="leader">Leader</SelectItem>
+                            <SelectItem value="leader">Leader / Phó nhóm</SelectItem>
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Leader và Phó nhóm có quyền quản lý như nhau
+                        </p>
                       </div>
                     </div>
                     <DialogFooter>
@@ -628,7 +736,6 @@ export default function GroupDetail() {
                   onOpenChange={(open) => {
                     setIsTaskDialogOpen(open);
                     if (open && stages.length > 0) {
-                      // Auto-select giai đoạn đầu tiên khi mở dialog
                       setNewTaskStageId(stages[0].id);
                     }
                   }}
@@ -667,7 +774,7 @@ export default function GroupDetail() {
                       </div>
                       {stages.length > 0 && (
                         <div className="space-y-2">
-                          <Label>Giai đoạn</Label>
+                          <Label>Giai đoạn *</Label>
                           <Select value={newTaskStageId} onValueChange={setNewTaskStageId}>
                             <SelectTrigger>
                               <SelectValue placeholder="Chọn giai đoạn..." />
@@ -681,7 +788,7 @@ export default function GroupDetail() {
                             </SelectContent>
                           </Select>
                           <p className="text-xs text-muted-foreground">
-                            Task sẽ được gán vào giai đoạn này. Bạn có thể chỉnh sửa sau.
+                            Task bắt buộc thuộc một giai đoạn. Bạn có thể chỉnh sửa sau.
                           </p>
                         </div>
                       )}
@@ -743,8 +850,12 @@ export default function GroupDetail() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="tasks">
+        <Tabs defaultValue="dashboard">
           <TabsList>
+            <TabsTrigger value="dashboard" className="gap-2">
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </TabsTrigger>
             <TabsTrigger value="tasks" className="gap-2">
               <ListTodo className="w-4 h-4" />
               Tasks ({tasks.length})
@@ -757,7 +868,29 @@ export default function GroupDetail() {
               <Users className="w-4 h-4" />
               Thành viên ({members.length})
             </TabsTrigger>
+            {isLeaderInGroup && (
+              <TabsTrigger value="settings" className="gap-2">
+                <Settings className="w-4 h-4" />
+                Cài đặt
+              </TabsTrigger>
+            )}
           </TabsList>
+
+          {/* Dashboard Tab */}
+          <TabsContent value="dashboard" className="mt-6">
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <GroupDashboard tasks={tasks} members={members} stages={stages} />
+              </div>
+              <div>
+                <GroupInfoCard 
+                  group={group} 
+                  canEdit={isLeaderInGroup} 
+                  onUpdate={fetchGroupData}
+                />
+              </div>
+            </div>
+          </TabsContent>
 
           <TabsContent value="tasks" className="mt-6">
             {/* Filters */}
@@ -843,6 +976,15 @@ export default function GroupDetail() {
                                 />
                               </div>
                             )}
+                            {isLeaderInGroup && (
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <StageManagement 
+                                  stage={stage} 
+                                  taskCount={stageTasks.length}
+                                  onUpdate={fetchGroupData}
+                                />
+                              </div>
+                            )}
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="px-4 pb-4">
@@ -912,8 +1054,82 @@ export default function GroupDetail() {
               ))}
             </div>
           </TabsContent>
+
+          {/* Settings Tab */}
+          {isLeaderInGroup && (
+            <TabsContent value="settings" className="mt-6">
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-destructive flex items-center gap-2">
+                      <Trash2 className="w-5 h-5" />
+                      Xóa nhóm
+                    </CardTitle>
+                    <CardDescription>
+                      Xóa nhóm sẽ xóa toàn bộ dữ liệu liên quan bao gồm task, giai đoạn, thành viên và lịch sử hoạt động.
+                      Hành động này không thể hoàn tác.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button 
+                      variant="destructive" 
+                      onClick={() => setIsDeleteGroupDialogOpen(true)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Xóa nhóm này
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
+
+      {/* Delete Group Confirmation Dialog */}
+      <AlertDialog open={isDeleteGroupDialogOpen} onOpenChange={setIsDeleteGroupDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận xóa nhóm</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                Bạn đang xóa nhóm <span className="font-bold text-foreground">"{group.name}"</span>.
+              </p>
+              <p>
+                Thao tác này sẽ xóa vĩnh viễn:
+              </p>
+              <ul className="list-disc list-inside text-sm space-y-1">
+                <li>{tasks.length} task</li>
+                <li>{stages.length} giai đoạn</li>
+                <li>{members.length} thành viên (chỉ xóa khỏi nhóm)</li>
+                <li>Toàn bộ điểm số và lịch sử nộp bài</li>
+              </ul>
+              <p className="pt-2">
+                Để xác nhận, vui lòng nhập tên nhóm: <span className="font-mono font-bold">{group.name}</span>
+              </p>
+              <Input
+                placeholder="Nhập tên nhóm để xác nhận..."
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmText('')}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteGroup}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeletingGroup || deleteConfirmText !== group.name}
+            >
+              {isDeletingGroup ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                'Xóa vĩnh viễn'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
