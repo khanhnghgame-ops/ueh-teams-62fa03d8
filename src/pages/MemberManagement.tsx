@@ -16,10 +16,11 @@ import type { Profile } from '@/types/database';
 
 export default function MemberManagement() {
   const navigate = useNavigate();
-  const { isAdmin, isLeader, isLoading: authLoading } = useAuth();
+  const { user, isAdmin, isLeader, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   
   const [members, setMembers] = useState<Profile[]>([]);
+  const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -39,6 +40,25 @@ export default function MemberManagement() {
   const [editStudentId, setEditStudentId] = useState('');
   const [editEmail, setEditEmail] = useState('');
 
+  // Check if a member is a leader (has 'admin' or 'leader' role)
+  const isMemberLeader = (memberId: string): boolean => {
+    const roles = memberRoles[memberId] || [];
+    return roles.includes('admin') || roles.includes('leader');
+  };
+
+  // Check if current user can manage (edit/delete/change password) the member
+  // Deputies (leader role but not admin) cannot manage Leaders (admin role)
+  const canManageMember = (memberId: string): boolean => {
+    if (isAdmin) return true; // Admin can manage everyone
+    if (!isLeader) return false; // Non-leaders cannot manage anyone
+    
+    // Deputies (leaders who are not admins) cannot manage other leaders/admins
+    const targetRoles = memberRoles[memberId] || [];
+    const isTargetAdmin = targetRoles.includes('admin');
+    
+    return !isTargetAdmin; // Deputies can only manage non-admin members
+  };
+
   useEffect(() => {
     if (!authLoading && !isAdmin && !isLeader) {
       navigate('/dashboard');
@@ -49,20 +69,57 @@ export default function MemberManagement() {
 
   const fetchMembers = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
+    
+    // Fetch profiles
+    const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false });
     
-    if (error) {
+    if (profilesError) {
       toast({
         title: 'Lỗi',
         description: 'Không thể tải danh sách thành viên',
         variant: 'destructive',
       });
-    } else {
-      setMembers(data || []);
+      setIsLoading(false);
+      return;
     }
+    
+    setMembers(profilesData || []);
+    
+    // Fetch user roles if admin
+    if (isAdmin) {
+      const { data: rolesData } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+      
+      if (rolesData) {
+        const rolesMap: Record<string, string[]> = {};
+        rolesData.forEach((r) => {
+          if (!rolesMap[r.user_id]) {
+            rolesMap[r.user_id] = [];
+          }
+          rolesMap[r.user_id].push(r.role);
+        });
+        setMemberRoles(rolesMap);
+      }
+    } else if (isLeader) {
+      // Deputies need to know who the admins are to prevent editing them
+      // Use RPC or check profiles for admin indicators
+      const profileIds = (profilesData || []).map(p => p.id);
+      const rolesMap: Record<string, string[]> = {};
+      
+      // For each profile, check if they have admin role
+      for (const profile of (profilesData || [])) {
+        const { data: hasAdminRole } = await supabase.rpc('is_admin', { _user_id: profile.id });
+        if (hasAdminRole) {
+          rolesMap[profile.id] = ['admin'];
+        }
+      }
+      setMemberRoles(rolesMap);
+    }
+    
     setIsLoading(false);
   };
 
@@ -136,6 +193,7 @@ export default function MemberManagement() {
         action: 'update_password',
         user_id: selectedMember.id,
         password: updatePassword,
+        requester_id: user?.id,
       }
     });
 
@@ -236,6 +294,7 @@ export default function MemberManagement() {
       body: {
         action: 'delete_user',
         user_id: selectedMember.id,
+        requester_id: user?.id,
       }
     });
 
@@ -391,49 +450,67 @@ export default function MemberManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {members.map((member) => (
-                    <TableRow key={member.id}>
-                      <TableCell className="font-medium">{member.full_name || '—'}</TableCell>
-                      <TableCell>{member.student_id}</TableCell>
-                      <TableCell>{member.email}</TableCell>
-                      <TableCell>
-                        {new Date(member.created_at).toLocaleDateString('vi-VN')}
-                      </TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(member)}
-                        >
-                          <Pencil className="w-4 h-4 mr-1" />
-                          Sửa
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedMember(member);
-                            setIsPasswordDialogOpen(true);
-                          }}
-                        >
-                          <Key className="w-4 h-4 mr-1" />
-                          Đổi MK
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            setSelectedMember(member);
-                            setIsDeleteDialogOpen(true);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Xóa
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {members.map((member) => {
+                    const canManage = canManageMember(member.id);
+                    const isLeaderMember = isMemberLeader(member.id);
+                    
+                    return (
+                      <TableRow key={member.id}>
+                        <TableCell className="font-medium">
+                          {member.full_name || '—'}
+                          {isLeaderMember && (
+                            <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                              Leader
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>{member.student_id}</TableCell>
+                        <TableCell>{member.email}</TableCell>
+                        <TableCell>
+                          {new Date(member.created_at).toLocaleDateString('vi-VN')}
+                        </TableCell>
+                        <TableCell className="text-right space-x-1">
+                          {canManage ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditDialog(member)}
+                              >
+                                <Pencil className="w-4 h-4 mr-1" />
+                                Sửa
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedMember(member);
+                                  setIsPasswordDialogOpen(true);
+                                }}
+                              >
+                                <Key className="w-4 h-4 mr-1" />
+                                Đổi MK
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  setSelectedMember(member);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                Xóa
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Không có quyền</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

@@ -48,70 +48,64 @@ export function MemberAuthForm() {
 
     setIsLoading(true);
 
-    // Tìm email từ MSSV nếu không phải email
-    let email = identifier.trim();
+    // Lookup email from MSSV using security definer function
+    const studentId = identifier.trim();
+    
+    try {
+      const { data: email, error: lookupError } = await supabase
+        .rpc('get_email_by_student_id', { _student_id: studentId });
 
-    if (!identifier.includes('@')) {
-      try {
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('student_id', identifier.trim())
-          .maybeSingle();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-          setIsLoading(false);
-          toast({
-            title: 'Lỗi hệ thống',
-            description: 'Không thể kiểm tra MSSV. Vui lòng thử đăng nhập bằng email.',
-            variant: 'destructive',
-          });
-          return;
-        }
-
-        if (profileData?.email) {
-          email = profileData.email;
-        } else {
-          setIsLoading(false);
-          toast({
-            title: 'Tài khoản không tồn tại',
-            description: 'MSSV này chưa được Leader/Nhóm phó thêm vào hệ thống.',
-            variant: 'destructive',
-          });
-          return;
-        }
-      } catch (err) {
-        console.error('Exception fetching profile:', err);
+      if (lookupError) {
+        console.error('Error looking up email by student_id:', lookupError);
         setIsLoading(false);
         toast({
           title: 'Lỗi hệ thống',
-          description: 'Không thể kiểm tra MSSV. Vui lòng thử đăng nhập bằng email.',
+          description: 'Không thể kiểm tra MSSV. Vui lòng thử lại sau.',
           variant: 'destructive',
         });
         return;
       }
-    }
 
-    const { error } = await signIn(email, password);
-    setIsLoading(false);
+      if (!email) {
+        setIsLoading(false);
+        toast({
+          title: 'Tài khoản không tồn tại',
+          description: 'MSSV này chưa được Leader/Nhóm phó thêm vào hệ thống.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
-    if (error) {
+      // Sign in with the found email
+      const { error } = await signIn(email, password);
+      setIsLoading(false);
+
+      if (error) {
+        toast({
+          title: 'Đăng nhập thất bại',
+          description:
+            error.message === 'Invalid login credentials'
+              ? 'MSSV hoặc mật khẩu không đúng'
+              : error.message,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Đăng nhập thành công',
+          description: 'Chào mừng bạn quay lại!',
+        });
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      console.error('Exception during login:', err);
+      setIsLoading(false);
       toast({
-        title: 'Đăng nhập thất bại',
-        description:
-          error.message === 'Invalid login credentials'
-            ? 'MSSV hoặc mật khẩu không đúng'
-            : error.message,
+        title: 'Lỗi hệ thống',
+        description: 'Có lỗi xảy ra. Vui lòng thử lại sau.',
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Đăng nhập thành công',
-        description: 'Chào mừng bạn quay lại!',
-      });
-      navigate('/dashboard');
     }
+
   };
 
   return (
