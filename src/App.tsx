@@ -9,12 +9,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Groups from "./pages/Groups";
 import GroupDetail from "./pages/GroupDetail";
-import TaskDetail from "./pages/TaskDetail";
-import MyTasks from "./pages/MyTasks";
-import AdminUsers from "./pages/AdminUsers";
-import MemberManagement from "./pages/MemberManagement";
 import NotFound from "./pages/NotFound";
-import AdminAuthPage from "./pages/AdminAuthPage";
 import AdminActivity from "./pages/AdminActivity";
 
 const queryClient = new QueryClient();
@@ -30,22 +25,12 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      {/* /auth chuyển hướng về /auth/member để tránh lỗi cũ */}
-      <Route path="/auth" element={<Navigate to="/auth/member" replace />} />
-      <Route path="/auth/member" element={<Auth />} />
-      <Route path="/auth/admin" element={<AdminAuthPage />} />
+      <Route path="/auth" element={<Auth />} />
+      <Route path="/auth/member" element={<Navigate to="/auth" replace />} />
+      <Route path="/auth/admin" element={<Navigate to="/auth" replace />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />
       <Route path="/groups/:groupId" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
-      <Route path="/groups/:groupId/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
-      <Route path="/tasks" element={<ProtectedRoute><MyTasks /></ProtectedRoute>} />
-      <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/members" element={<ProtectedRoute><MemberManagement /></ProtectedRoute>} />
-      <Route path="/admin/approvals" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/tasks" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/scores" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/groups" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/accounts" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
       <Route path="/admin/activity" element={<ProtectedRoute><AdminActivity /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -28,15 +28,12 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import {
-  Users,
   LayoutDashboard,
   FolderKanban,
-  ListTodo,
-  UserCog,
   LogOut,
   ChevronDown,
-  Shield,
   Key,
+  Shield,
 } from 'lucide-react';
 import uehLogo from '@/assets/ueh-logo-new.png';
 import UserChangePasswordDialog from '@/components/UserChangePasswordDialog';
@@ -47,28 +44,18 @@ interface DashboardLayoutProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Nhóm của tôi', href: '/groups', icon: FolderKanban },
-  { name: 'Task của tôi', href: '/tasks', icon: ListTodo },
+  { name: 'Projects', href: '/groups', icon: FolderKanban },
 ];
 
-const adminNavigation = [
-  { name: 'Quản lý thành viên', href: '/admin/members', icon: Users },
-  { name: 'Quản lý task', href: '/admin/tasks', icon: ListTodo },
-  { name: 'Điểm & giai đoạn', href: '/admin/scores', icon: LayoutDashboard },
-  { name: 'Quản lý nhóm', href: '/admin/groups', icon: FolderKanban },
-  { name: 'Tài khoản (Admin)', href: '/admin/accounts', icon: UserCog },
-  { name: 'Nhật ký', href: '/admin/activity', icon: Shield },
+const leaderNavigation = [
+  { name: 'Nhật ký hoạt động', href: '/admin/activity', icon: Shield },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, isAdmin, isLeader, signOut, refreshProfile } = useAuth();
-  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-  const [fullName, setFullName] = useState(profile?.full_name || '');
-  const [studentId, setStudentId] = useState(profile?.student_id || '');
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -82,36 +69,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       .join('')
       .toUpperCase()
       .slice(0, 2);
-  };
-
-  const handleSaveProfile = async () => {
-    if (!profile) return;
-    setIsSavingProfile(true);
-
-    try {
-      const updateData: any = {
-        full_name: fullName.trim(),
-        student_id: studentId.trim(),
-      };
-
-      if (!isAdmin) {
-        updateData.is_approved = false;
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', profile.id);
-
-      if (error) throw error;
-
-      await refreshProfile();
-      setIsProfileDialogOpen(false);
-    } catch (error) {
-      console.error('Error updating profile', error);
-    } finally {
-      setIsSavingProfile(false);
-    }
   };
 
   return (
@@ -151,11 +108,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <SidebarGroup>
                 <SidebarGroupLabel className="flex items-center gap-2">
                   <Shield className="w-4 h-4" />
-                  Quản trị Leader / Admin
+                  Leader
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {adminNavigation.map((item) => (
+                    {leaderNavigation.map((item) => (
                       <SidebarMenuItem key={item.name}>
                         <SidebarMenuButton
                           asChild

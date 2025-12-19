@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Users, Shield } from 'lucide-react';
+import { ArrowRight, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import uehLogo from '@/assets/ueh-logo-new.png';
 
@@ -20,15 +20,10 @@ export default function Landing() {
             <span className="hidden sm:block font-heading font-semibold text-lg">TaskFlow UEH</span>
           </div>
           <div className="flex items-center gap-3">
-            <Link to="/auth/member">
+            <Link to="/auth">
               <Button variant="secondary" className="font-medium">
-                Đăng nhập thành viên
+                Đăng nhập
                 <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-            <Link to="/auth/admin">
-              <Button className="font-medium bg-orange-500 hover:bg-orange-600 text-white border-0">
-                <Shield className="w-4 h-4 mr-2" /> Leader / Nhóm phó
               </Button>
             </Link>
           </div>
@@ -73,19 +68,10 @@ export default function Landing() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <Link to="/auth/member" className="w-full sm:w-auto">
+                  <Link to="/auth" className="w-full sm:w-auto">
                     <Button size="lg" className="w-full text-base font-semibold px-8">
-                      Bắt đầu với tư cách thành viên
+                      Đăng nhập hệ thống
                       <ArrowRight className="w-5 h-5 ml-2" />
-                    </Button>
-                  </Link>
-                  <Link to="/auth/admin" className="w-full sm:w-auto">
-                    <Button
-                      size="lg"
-                      className="w-full text-base font-semibold px-8 bg-orange-500 hover:bg-orange-600 text-white"
-                    >
-                      <Shield className="w-5 h-5 mr-2" />
-                      Dành cho Leader/Nhóm phó
                     </Button>
                   </Link>
                 </div>
@@ -107,7 +93,7 @@ export default function Landing() {
                 </div>
               </div>
 
-              {/* Right illustration bỏ Dashboard dự án */}
+              {/* Right illustration */}
               <div className="hidden lg:block" />
             </div>
           </div>
