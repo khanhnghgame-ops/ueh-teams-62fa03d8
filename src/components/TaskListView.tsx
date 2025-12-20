@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Task, Stage, GroupMember } from '@/types/database';
 
 interface TaskListViewProps {
@@ -70,6 +71,7 @@ export default function TaskListView({
   onDeleteStage,
 }: TaskListViewProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set(stages.map(s => s.id)));
@@ -167,6 +169,17 @@ export default function TaskListView({
       const { error } = await supabase.from('tasks').delete().eq('id', taskToDelete.id);
 
       if (error) throw error;
+
+      // Log activity
+      await supabase.from('activity_logs').insert({
+        user_id: user!.id,
+        user_name: user?.email || 'Unknown',
+        action: 'DELETE_TASK',
+        action_type: 'task',
+        description: `Xóa task "${taskToDelete.title}"`,
+        group_id: groupId,
+        metadata: { task_id: taskToDelete.id, task_title: taskToDelete.title }
+      });
 
       toast({
         title: 'Đã xóa task',
