@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import KanbanBoard from '@/components/KanbanBoard';
+import TaskListView from '@/components/TaskListView';
 import GroupDashboard from '@/components/GroupDashboard';
 import GroupInfoCard from '@/components/GroupInfoCard';
 import MemberManagementCard from '@/components/MemberManagementCard';
@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Loader2, ArrowLeft, UserPlus, Layers, LayoutDashboard, Trash2, Settings, Kanban } from 'lucide-react';
+import { Plus, Users, Loader2, ArrowLeft, UserPlus, Layers, LayoutDashboard, Trash2, Settings } from 'lucide-react';
 import type { Group, GroupMember, Task, Profile, Stage } from '@/types/database';
 
 interface ExtendedGroup extends Group {
@@ -279,16 +279,23 @@ export default function GroupDetail() {
           )}
         </div>
 
-        <Tabs defaultValue="kanban">
+        <Tabs defaultValue="overview">
           <TabsList>
-            <TabsTrigger value="kanban" className="gap-2"><Kanban className="w-4 h-4" />Task & Giai đoạn</TabsTrigger>
             <TabsTrigger value="overview" className="gap-2"><LayoutDashboard className="w-4 h-4" />Tổng quan</TabsTrigger>
+            <TabsTrigger value="tasks" className="gap-2"><Layers className="w-4 h-4" />Task & Giai đoạn</TabsTrigger>
             <TabsTrigger value="members" className="gap-2"><Users className="w-4 h-4" />Thành viên ({members.length})</TabsTrigger>
             {isLeaderInGroup && group.created_by === user?.id && <TabsTrigger value="settings" className="gap-2"><Settings className="w-4 h-4" />Cài đặt</TabsTrigger>}
           </TabsList>
 
-          <TabsContent value="kanban" className="mt-6">
-            <KanbanBoard stages={stages} tasks={tasks} members={members} isLeaderInGroup={isLeaderInGroup} groupId={groupId!} onRefresh={fetchGroupData} onEditTask={setEditingTask} onCreateTask={(stageId) => { setNewTaskStageId(stageId); setIsTaskDialogOpen(true); }} onEditStage={setEditingStage} onDeleteStage={setStageToDelete} />
+          <TabsContent value="overview" className="mt-6">
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2"><GroupDashboard tasks={tasks} members={members} stages={stages} /></div>
+              <div><GroupInfoCard group={group} canEdit={isLeaderInGroup} onUpdate={fetchGroupData} /></div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="tasks" className="mt-6">
+            <TaskListView stages={stages} tasks={tasks} members={members} isLeaderInGroup={isLeaderInGroup} groupId={groupId!} onRefresh={fetchGroupData} onEditTask={setEditingTask} onCreateTask={(stageId) => { setNewTaskStageId(stageId); setIsTaskDialogOpen(true); }} onEditStage={setEditingStage} onDeleteStage={setStageToDelete} />
           </TabsContent>
 
           <TabsContent value="overview" className="mt-6">
@@ -299,7 +306,7 @@ export default function GroupDetail() {
           </TabsContent>
 
           <TabsContent value="members" className="mt-6">
-            <MemberManagementCard members={members} isLeaderInGroup={isLeaderInGroup} groupId={groupId!} currentUserId={user?.id || ''} groupCreatorId={group.created_by} onRefresh={fetchGroupData} />
+            <MemberManagementCard members={members} availableProfiles={availableProfiles} isLeaderInGroup={isLeaderInGroup} groupId={groupId!} currentUserId={user?.id || ''} groupCreatorId={group.created_by} onRefresh={fetchGroupData} />
           </TabsContent>
 
           {isLeaderInGroup && group.created_by === user?.id && (

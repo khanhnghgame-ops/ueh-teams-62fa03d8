@@ -1,9 +1,9 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,27 +13,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-} from '@/components/ui/sidebar';
-import {
   LayoutDashboard,
   FolderKanban,
   LogOut,
   ChevronDown,
   Key,
-  Shield,
+  Menu,
+  X,
 } from 'lucide-react';
 import uehLogo from '@/assets/ueh-logo-new.png';
 import UserChangePasswordDialog from '@/components/UserChangePasswordDialog';
@@ -47,15 +33,12 @@ const navigation = [
   { name: 'Projects', href: '/groups', icon: FolderKanban },
 ];
 
-const leaderNavigation = [
-  { name: 'Nhật ký hoạt động', href: '/admin/activity', icon: Shield },
-];
-
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, isAdmin, isLeader, signOut, refreshProfile } = useAuth();
+  const { profile, isAdmin, isLeader, signOut } = useAuth();
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -71,130 +54,143 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       .slice(0, 2);
   };
 
+  const getRoleBadge = () => {
+    if (isAdmin) return <Badge className="bg-destructive/20 text-destructive text-xs font-medium">Admin</Badge>;
+    if (isLeader) return <Badge className="bg-warning/20 text-warning text-xs font-medium">Leader</Badge>;
+    return <Badge variant="secondary" className="text-xs font-medium">Member</Badge>;
+  };
+
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full overflow-hidden">
-        <Sidebar className="border-r flex-shrink-0">
-          <SidebarHeader className="p-4">
-            <Link to="/dashboard" className="flex items-center gap-3">
-              <img src={uehLogo} alt="UEH Logo" className="h-10 w-auto drop-shadow-md" />
-              <span className="font-bold text-lg text-sidebar-foreground">TaskFlow</span>
-            </Link>
-          </SidebarHeader>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Fixed Top Navigation Bar */}
+      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-primary shadow-lg">
+        <div className="h-full max-w-[1600px] mx-auto px-4 flex items-center justify-between">
+          {/* Left: Logo & Brand */}
+          <Link to="/dashboard" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 bg-white rounded-lg p-1.5 shadow-md group-hover:shadow-lg transition-shadow">
+              <img src={uehLogo} alt="UEH Logo" className="w-full h-full object-contain" />
+            </div>
+            <span className="font-bold text-lg text-primary-foreground hidden sm:block">TaskFlow</span>
+          </Link>
 
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>Menu chính</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {navigation.map((item) => (
-                    <SidebarMenuItem key={item.name}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={location.pathname === item.href}
-                      >
-                        <Link to={item.href}>
-                          <item.icon className="w-5 h-5" />
-                          <span>{item.name}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+          {/* Center: Navigation Menu */}
+          <nav className="hidden md:flex items-center gap-1">
+            {navigation.map((item) => {
+              const isActive = location.pathname === item.href || 
+                (item.href === '/groups' && location.pathname.startsWith('/groups/'));
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    isActive 
+                      ? 'bg-white/20 text-white' 
+                      : 'text-white/80 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
 
-            {(isAdmin || isLeader) && (
-              <SidebarGroup>
-                <SidebarGroupLabel className="flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
-                  Leader
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {leaderNavigation.map((item) => (
-                      <SidebarMenuItem key={item.name}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={location.pathname === item.href}
-                        >
-                          <Link to={item.href}>
-                            <item.icon className="w-5 h-5" />
-                            <span>{item.name}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
-          </SidebarContent>
-
-          <SidebarFooter className="p-4">
+          {/* Right: User Info */}
+          <div className="flex items-center gap-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 h-auto py-3 px-2"
+                  className="flex items-center gap-2 h-auto py-1.5 px-2 hover:bg-white/10 text-white"
                 >
-                  <Avatar className="h-8 w-8 flex-shrink-0">
-                    <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-sm">
+                  <Avatar className="h-9 w-9 border-2 border-white/30">
+                    <AvatarFallback className="bg-accent text-accent-foreground text-sm font-semibold">
                       {profile ? getInitials(profile.full_name) : '?'}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-medium truncate text-sidebar-foreground max-w-[140px]">
+                  <div className="hidden sm:flex flex-col items-start">
+                    <span className="text-sm font-semibold text-white truncate max-w-[120px]">
                       {profile?.full_name || 'Đang tải...'}
-                    </p>
-                    <p className="text-xs text-sidebar-foreground/70 truncate max-w-[140px]">
-                      {profile?.student_id}
-                    </p>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {getRoleBadge()}
+                    </div>
                   </div>
-                  <ChevronDown className="w-4 h-4 flex-shrink-0 text-sidebar-foreground/70" />
+                  <ChevronDown className="w-4 h-4 text-white/70 hidden sm:block" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="flex flex-col items-start">
-                  <span className="font-medium truncate max-w-full">{profile?.full_name}</span>
-                  <span className="text-xs text-muted-foreground truncate max-w-full">{profile?.email}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <span className="text-xs">
-                    Vai trò: {isAdmin ? 'Admin' : isLeader ? 'Leader' : 'Member'}
-                  </span>
-                </DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col gap-1">
+                    <p className="font-semibold">{profile?.full_name}</p>
+                    <p className="text-xs text-muted-foreground">{profile?.email}</p>
+                    <p className="text-xs text-muted-foreground">MSSV: {profile?.student_id}</p>
+                  </div>
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setIsChangePasswordOpen(true)}>
                   <Key className="w-4 h-4 mr-2" />
                   Đổi mật khẩu
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                   <LogOut className="w-4 h-4 mr-2" />
                   Đăng xuất
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </SidebarFooter>
-        </Sidebar>
 
-        <SidebarInset className="flex-1">
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 bg-card">
-            <SidebarTrigger className="-ml-1" />
-          </header>
-          <main className="flex-1 p-6 bg-background">
-            {children}
-          </main>
-        </SidebarInset>
-      </div>
+            {/* Mobile Menu Button */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="md:hidden text-white hover:bg-white/10"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </Button>
+          </div>
+        </div>
+
+        {/* Mobile Navigation Menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden absolute top-16 left-0 right-0 bg-primary border-t border-white/10 shadow-lg">
+            <nav className="p-4 space-y-2">
+              {navigation.map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
+                      isActive 
+                        ? 'bg-white/20 text-white' 
+                        : 'text-white/80 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <item.icon className="w-5 h-5" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        )}
+      </header>
+
+      {/* Main Content - with top padding for fixed header */}
+      <main className="flex-1 pt-16">
+        <div className="max-w-[1600px] mx-auto p-6">
+          {children}
+        </div>
+      </main>
 
       {/* Change Password Dialog */}
       <UserChangePasswordDialog 
         open={isChangePasswordOpen} 
         onOpenChange={setIsChangePasswordOpen} 
       />
-    </SidebarProvider>
+    </div>
   );
 }
