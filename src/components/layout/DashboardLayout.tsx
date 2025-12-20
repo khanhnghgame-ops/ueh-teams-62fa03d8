@@ -67,9 +67,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="h-full max-w-[1600px] mx-auto px-4 flex items-center justify-between">
           {/* Left: Logo & Brand */}
           <Link to="/dashboard" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-white rounded-lg p-1.5 shadow-md group-hover:shadow-lg transition-shadow">
-              <img src={uehLogo} alt="UEH Logo" className="w-full h-full object-contain" />
-            </div>
+            <img src={uehLogo} alt="UEH Logo" className="h-10 w-auto drop-shadow-md group-hover:scale-105 transition-transform" />
             <span className="font-bold text-lg text-primary-foreground hidden sm:block">TaskFlow</span>
           </Link>
 
