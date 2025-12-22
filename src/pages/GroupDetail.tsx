@@ -21,7 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Loader2, ArrowLeft, UserPlus, Layers, LayoutDashboard, Trash2, Settings, Activity } from 'lucide-react';
+import { Plus, Users, Loader2, ArrowLeft, Layers, LayoutDashboard, Trash2, Settings, Activity } from 'lucide-react';
 import type { Group, GroupMember, Task, Profile, Stage } from '@/types/database';
 
 interface ExtendedGroup extends Group {
@@ -60,11 +60,6 @@ export default function GroupDetail() {
   const [newTaskDeadline, setNewTaskDeadline] = useState('');
   const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>([]);
   const [newTaskStageId, setNewTaskStageId] = useState<string>('');
-
-  const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
-  const [isAddingMember, setIsAddingMember] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'member' | 'leader'>('member');
 
   const [isDeleteGroupDialogOpen, setIsDeleteGroupDialogOpen] = useState(false);
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
@@ -153,23 +148,6 @@ export default function GroupDetail() {
       toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
     } finally {
       setIsCreatingTask(false);
-    }
-  };
-
-  const handleAddMember = async () => {
-    if (!selectedUserId) return;
-    setIsAddingMember(true);
-    try {
-      await supabase.from('group_members').insert({ group_id: groupId, user_id: selectedUserId, role: selectedRole });
-      toast({ title: 'Thành công', description: 'Đã thêm thành viên' });
-      setIsMemberDialogOpen(false);
-      setSelectedUserId('');
-      setSelectedRole('member');
-      fetchGroupData();
-    } catch (error: any) {
-      toast({ title: 'Lỗi', description: error.code === '23505' ? 'Thành viên này đã có trong nhóm' : error.message, variant: 'destructive' });
-    } finally {
-      setIsAddingMember(false);
     }
   };
 
@@ -272,31 +250,6 @@ export default function GroupDetail() {
                       </DialogContent>
                     </Dialog>
                   </>
-                )}
-                {activeTab === 'members' && (
-                  <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
-                    <DialogTrigger asChild><Button size="sm"><UserPlus className="w-4 h-4 mr-2" />Thêm thành viên</Button></DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader><DialogTitle>Thêm thành viên</DialogTitle></DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label>Chọn thành viên</Label>
-                          <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                            <SelectTrigger><SelectValue placeholder="Chọn..." /></SelectTrigger>
-                            <SelectContent>{availableProfiles.map(p => <SelectItem key={p.id} value={p.id}>{p.full_name} ({p.student_id})</SelectItem>)}</SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Vai trò</Label>
-                          <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as 'member' | 'leader')}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent><SelectItem value="member">Thành viên</SelectItem><SelectItem value="leader">Phó nhóm</SelectItem></SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <DialogFooter><Button variant="outline" onClick={() => setIsMemberDialogOpen(false)}>Hủy</Button><Button onClick={handleAddMember} disabled={isAddingMember}>{isAddingMember ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Thêm'}</Button></DialogFooter>
-                    </DialogContent>
-                  </Dialog>
                 )}
               </div>
             )}
