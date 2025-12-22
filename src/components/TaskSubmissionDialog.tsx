@@ -44,7 +44,8 @@ import {
   Users,
   Link as LinkIcon,
   MessageSquare,
-  Info
+  Info,
+  ChevronDown
 } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types/database';
 import { format } from 'date-fns';
@@ -298,9 +299,11 @@ export default function TaskSubmissionDialog({
 
   const timeStatus = getTimeStatus();
 
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] p-0 overflow-hidden flex flex-col">
+      <DialogContent className="max-w-6xl w-[98vw] max-h-[95vh] p-0 overflow-hidden flex flex-col">
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b bg-muted/30">
           <div className="flex items-start justify-between gap-4">
@@ -312,11 +315,6 @@ export default function TaskSubmissionDialog({
                 <DialogTitle className="text-xl font-bold line-clamp-2">
                   {task?.title}
                 </DialogTitle>
-                {task?.description && (
-                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                    {task.description}
-                  </p>
-                )}
               </div>
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
@@ -357,6 +355,36 @@ export default function TaskSubmissionDialog({
         
         <ScrollArea className="flex-1">
           <div className="p-6">
+            {/* Task Description Section - Expandable */}
+            {task?.description && (
+              <Card className="border-2 border-primary/20 mb-6">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Info className="w-4 h-4 text-primary" />
+                      Mô tả công việc
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                      className="gap-1.5 text-xs"
+                    >
+                      {isDescriptionExpanded ? 'Thu gọn' : 'Xem đầy đủ'}
+                      <ChevronDown className={`w-4 h-4 transition-transform ${isDescriptionExpanded ? 'rotate-180' : ''}`} />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-sm text-muted-foreground whitespace-pre-wrap ${
+                    isDescriptionExpanded ? '' : 'line-clamp-3'
+                  }`}>
+                    {task.description}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid lg:grid-cols-3 gap-6">
               {/* Left Column - Task Info & Submission */}
               <div className="lg:col-span-2 space-y-6">
