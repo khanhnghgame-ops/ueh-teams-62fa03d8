@@ -20,6 +20,7 @@ import {
   Key,
   Menu,
   X,
+  Users,
 } from 'lucide-react';
 import uehLogo from '@/assets/ueh-logo-new.png';
 import UserChangePasswordDialog from '@/components/UserChangePasswordDialog';
@@ -28,9 +29,17 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-const navigation = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  requiresLeader?: boolean;
+}
+
+const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/groups', icon: FolderKanban },
+  { name: 'Thành viên', href: '/members', icon: Users, requiresLeader: true },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -73,24 +82,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* Center: Navigation Menu */}
           <nav className="hidden md:flex items-center gap-1">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href || 
-                (item.href === '/groups' && location.pathname.startsWith('/groups/'));
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                    isActive 
-                      ? 'bg-white/20 text-white' 
-                      : 'text-white/80 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  <item.icon className="w-4 h-4" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
+            {navigation
+              .filter(item => !item.requiresLeader || isLeader || isAdmin)
+              .map((item) => {
+                const isActive = location.pathname === item.href || 
+                  (item.href === '/groups' && location.pathname.startsWith('/groups/'));
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                      isActive 
+                        ? 'bg-white/20 text-white' 
+                        : 'text-white/80 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
           </nav>
 
           {/* Right: User Info */}
@@ -154,24 +165,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-16 left-0 right-0 bg-primary border-t border-white/10 shadow-lg">
             <nav className="p-4 space-y-2">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
-                      isActive 
-                        ? 'bg-white/20 text-white' 
-                        : 'text-white/80 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    <item.icon className="w-5 h-5" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
+              {navigation
+                .filter(item => !item.requiresLeader || isLeader || isAdmin)
+                .map((item) => {
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
+                        isActive 
+                          ? 'bg-white/20 text-white' 
+                          : 'text-white/80 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      <span>{item.name}</span>
+                    </Link>
+                  );
+                })}
             </nav>
           </div>
         )}
