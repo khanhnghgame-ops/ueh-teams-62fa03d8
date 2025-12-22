@@ -110,8 +110,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRoles([]);
   };
 
+  // System-level roles (from user_roles table)
+  // isAdmin: có quyền cao nhất - quản lý hệ thống, xem tất cả data
   const isAdmin = roles.includes('admin');
+  
+  // isLeader: được quyền tạo project mới (system-level leader hoặc admin)
+  // Sau khi cleanup: chỉ admin mới có role trong user_roles, nên isLeader = isAdmin
   const isLeader = roles.includes('leader') || isAdmin;
+  
   // BỎ CƠ CHẾ DUYỆT TÀI KHOẢN: tất cả user đã đăng nhập đều được xem là hợp lệ
   const isApproved = true;
   const mustChangePassword = profile?.must_change_password ?? false;
