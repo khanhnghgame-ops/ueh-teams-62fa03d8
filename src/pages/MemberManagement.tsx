@@ -6,17 +6,41 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, UserPlus, Users, Trash2, Key, Mail, Hash, User, Pencil } from 'lucide-react';
+import { 
+  Loader2, 
+  UserPlus, 
+  Users, 
+  Trash2, 
+  Key, 
+  Mail, 
+  Hash, 
+  User, 
+  Pencil, 
+  Search,
+  MoreVertical,
+  Shield,
+  UserCheck,
+  Info
+} from 'lucide-react';
 import type { Profile } from '@/types/database';
 
 export default function MemberManagement() {
   const navigate = useNavigate();
-  const { user, isAdmin, isLeader, isLoading: authLoading } = useAuth();
+  const { user, isAdmin, isLeader, isLoading: authLoading, profile: currentProfile } = useAuth();
   const { toast } = useToast();
   
   const [members, setMembers] = useState<Profile[]>([]);
@@ -28,11 +52,14 @@ export default function MemberManagement() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Profile | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   
-  // Form state
+  // Form state - New member
   const [newEmail, setNewEmail] = useState('');
   const [newStudentId, setNewStudentId] = useState('');
   const [newFullName, setNewFullName] = useState('');
+  
+  // Password dialog
   const [updatePassword, setUpdatePassword] = useState('');
   
   // Edit form state
@@ -40,23 +67,32 @@ export default function MemberManagement() {
   const [editStudentId, setEditStudentId] = useState('');
   const [editEmail, setEditEmail] = useState('');
 
-  // Check if a member is a leader (has 'admin' or 'leader' role)
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Check if a member has leader/admin role in system
   const isMemberLeader = (memberId: string): boolean => {
     const roles = memberRoles[memberId] || [];
     return roles.includes('admin') || roles.includes('leader');
   };
 
-  // Check if current user can manage (edit/delete/change password) the member
-  // Deputies (leader role but not admin) cannot manage Leaders (admin role)
+  // Check if current user can manage the member
   const canManageMember = (memberId: string): boolean => {
-    if (isAdmin) return true; // Admin can manage everyone
+    if (memberId === user?.id) return false; // Cannot manage self
+    if (isAdmin) return true; // Admin can manage everyone except self
     if (!isLeader) return false; // Non-leaders cannot manage anyone
     
     // Deputies (leaders who are not admins) cannot manage other leaders/admins
     const targetRoles = memberRoles[memberId] || [];
     const isTargetAdmin = targetRoles.includes('admin');
     
-    return !isTargetAdmin; // Deputies can only manage non-admin members
+    return !isTargetAdmin;
   };
 
   useEffect(() => {
@@ -70,10 +106,11 @@ export default function MemberManagement() {
   const fetchMembers = async () => {
     setIsLoading(true);
     
-    // Fetch profiles
+    // Fetch all approved profiles
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('*')
+      .eq('is_approved', true)
       .order('created_at', { ascending: false });
     
     if (profilesError) {
@@ -88,7 +125,7 @@ export default function MemberManagement() {
     
     setMembers(profilesData || []);
     
-    // Fetch user roles if admin
+    // Fetch user roles
     if (isAdmin) {
       const { data: rolesData } = await supabase
         .from('user_roles')
@@ -105,12 +142,8 @@ export default function MemberManagement() {
         setMemberRoles(rolesMap);
       }
     } else if (isLeader) {
-      // Deputies need to know who the admins are to prevent editing them
-      // Use RPC or check profiles for admin indicators
-      const profileIds = (profilesData || []).map(p => p.id);
+      // Check admin status for each profile
       const rolesMap: Record<string, string[]> = {};
-      
-      // For each profile, check if they have admin role
       for (const profile of (profilesData || [])) {
         const { data: hasAdminRole } = await supabase.rpc('is_admin', { _user_id: profile.id });
         if (hasAdminRole) {
@@ -157,6 +190,15 @@ export default function MemberManagement() {
       return;
     }
 
+    // Log activity
+    await supabase.from('activity_logs').insert({
+      user_id: user!.id,
+      user_name: currentProfile?.full_name || user?.email || 'Unknown',
+      action: 'CREATE_SYSTEM_MEMBER',
+      action_type: 'member',
+      description: `Tạo tài khoản hệ thống cho ${newFullName}`,
+    });
+
     toast({
       title: 'Tạo thành viên thành công',
       description: `Đã tạo tài khoản cho ${newFullName}. Mật khẩu mặc định: 123456`,
@@ -173,9 +215,7 @@ export default function MemberManagement() {
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedMember || !updatePassword) {
-      return;
-    }
+    if (!selectedMember || !updatePassword) return;
 
     if (updatePassword.length < 6) {
       toast({
@@ -208,6 +248,15 @@ export default function MemberManagement() {
       return;
     }
 
+    // Log activity
+    await supabase.from('activity_logs').insert({
+      user_id: user!.id,
+      user_name: currentProfile?.full_name || user?.email || 'Unknown',
+      action: 'CHANGE_MEMBER_PASSWORD',
+      action_type: 'member',
+      description: `Đổi mật khẩu cho ${selectedMember.full_name}`,
+    });
+
     toast({
       title: 'Cập nhật thành công',
       description: `Đã đổi mật khẩu cho ${selectedMember.full_name}`,
@@ -234,7 +283,7 @@ export default function MemberManagement() {
 
     setIsCreating(true);
 
-    // Update profile in database
+    // Update profile
     const { error: profileError } = await supabase
       .from('profiles')
       .update({
@@ -243,7 +292,7 @@ export default function MemberManagement() {
       })
       .eq('id', selectedMember.id);
 
-    // Update email in auth if changed
+    // Update email if changed
     if (editEmail.trim() !== selectedMember.email) {
       const { data, error } = await supabase.functions.invoke('manage-users', {
         body: {
@@ -274,6 +323,15 @@ export default function MemberManagement() {
       });
       return;
     }
+
+    // Log activity
+    await supabase.from('activity_logs').insert({
+      user_id: user!.id,
+      user_name: currentProfile?.full_name || user?.email || 'Unknown',
+      action: 'EDIT_SYSTEM_MEMBER',
+      action_type: 'member',
+      description: `Cập nhật thông tin tài khoản ${editFullName}`,
+    });
 
     toast({
       title: 'Cập nhật thành công',
@@ -309,9 +367,18 @@ export default function MemberManagement() {
       return;
     }
 
+    // Log activity
+    await supabase.from('activity_logs').insert({
+      user_id: user!.id,
+      user_name: currentProfile?.full_name || user?.email || 'Unknown',
+      action: 'DELETE_SYSTEM_MEMBER',
+      action_type: 'member',
+      description: `Xóa tài khoản ${selectedMember.full_name} khỏi hệ thống`,
+    });
+
     toast({
       title: 'Xóa thành công',
-      description: `Đã xóa thành viên ${selectedMember.full_name}`,
+      description: `Đã xóa tài khoản ${selectedMember.full_name} khỏi hệ thống`,
     });
 
     setSelectedMember(null);
@@ -327,6 +394,17 @@ export default function MemberManagement() {
     setIsEditDialogOpen(true);
   };
 
+  // Filter members by search
+  const filteredMembers = members.filter(m => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      m.full_name.toLowerCase().includes(query) ||
+      m.student_id.toLowerCase().includes(query) ||
+      m.email.toLowerCase().includes(query)
+    );
+  });
+
   if (authLoading || isLoading) {
     return (
       <DashboardLayout>
@@ -340,80 +418,87 @@ export default function MemberManagement() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-heading font-bold">Quản lý thành viên</h1>
-            <p className="text-muted-foreground">Thêm, chỉnh sửa, xóa và phân quyền thành viên trong hệ thống</p>
+            <h1 className="text-3xl font-heading font-bold">Thành viên hệ thống</h1>
+            <p className="text-muted-foreground">
+              Quản lý tài khoản thành viên trong hệ thống. Thêm thành viên vào project tại trang chi tiết project.
+            </p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="font-semibold">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Thêm thành viên
+              <Button className="font-semibold gap-2">
+                <UserPlus className="w-4 h-4" />
+                Tạo tài khoản mới
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Thêm thành viên mới</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-primary" />
+                  Tạo tài khoản thành viên
+                </DialogTitle>
                 <DialogDescription>
-                  Tạo tài khoản cho thành viên mới. Mật khẩu mặc định là "123456", thành viên sẽ được yêu cầu đổi mật khẩu khi đăng nhập lần đầu.
+                  Tạo tài khoản mới cho thành viên. Mật khẩu mặc định là "123456", thành viên sẽ được yêu cầu đổi mật khẩu khi đăng nhập lần đầu.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreateMember} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="fullName">Họ và tên</Label>
+                  <Label htmlFor="fullName">Họ và tên <span className="text-destructive">*</span></Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id="fullName"
                       placeholder="Nguyễn Văn A"
-                      className="pl-10"
+                      className="pl-10 h-11"
                       value={newFullName}
                       onChange={(e) => setNewFullName(e.target.value)}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="studentId">Mã số sinh viên</Label>
+                  <Label htmlFor="studentId">Mã số sinh viên <span className="text-destructive">*</span></Label>
                   <div className="relative">
                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id="studentId"
                       placeholder="31241234567"
-                      className="pl-10"
+                      className="pl-10 h-11"
                       value={newStudentId}
                       onChange={(e) => setNewStudentId(e.target.value)}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email UEH</Label>
+                  <Label htmlFor="email">Email <span className="text-destructive">*</span></Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id="email"
                       type="email"
                       placeholder="email@ueh.edu.vn"
-                      className="pl-10"
+                      className="pl-10 h-11"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
                     />
                   </div>
                 </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    <Key className="w-4 h-4 inline mr-1" />
+                <div className="p-3 bg-muted rounded-lg flex items-start gap-2">
+                  <Key className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                  <div className="text-sm text-muted-foreground">
                     Mật khẩu mặc định: <span className="font-mono font-bold">123456</span>
-                  </p>
+                    <br />
+                    <span className="text-xs">Thành viên sẽ đổi mật khẩu khi đăng nhập lần đầu</span>
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Hủy
                   </Button>
-                  <Button type="submit" disabled={isCreating}>
-                    {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
-                    Tạo thành viên
+                  <Button type="submit" disabled={isCreating} className="min-w-28">
+                    {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tạo tài khoản'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -421,227 +506,269 @@ export default function MemberManagement() {
           </Dialog>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Danh sách thành viên ({members.length})
-            </CardTitle>
-            <CardDescription>
-              Tất cả thành viên trong hệ thống
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {members.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Chưa có thành viên nào</p>
-                <p className="text-sm">Bấm "Thêm thành viên" để bắt đầu</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Họ tên</TableHead>
-                    <TableHead>MSSV</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Ngày tạo</TableHead>
-                    <TableHead className="text-right">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {members.map((member) => {
-                    const canManage = canManageMember(member.id);
-                    const isLeaderMember = isMemberLeader(member.id);
-                    
-                    return (
-                      <TableRow key={member.id}>
-                        <TableCell className="font-medium">
-                          {member.full_name || '—'}
-                          {isLeaderMember && (
-                            <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              Leader
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>{member.student_id}</TableCell>
-                        <TableCell>{member.email}</TableCell>
-                        <TableCell>
-                          {new Date(member.created_at).toLocaleDateString('vi-VN')}
-                        </TableCell>
-                        <TableCell className="text-right space-x-1">
-                          {canManage ? (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => openEditDialog(member)}
-                              >
-                                <Pencil className="w-4 h-4 mr-1" />
-                                Sửa
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedMember(member);
-                                  setIsPasswordDialogOpen(true);
-                                }}
-                              >
-                                <Key className="w-4 h-4 mr-1" />
-                                Đổi MK
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  setSelectedMember(member);
-                                  setIsDeleteDialogOpen(true);
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4 mr-1" />
-                                Xóa
-                              </Button>
-                            </>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Không có quyền</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
+        {/* Info Card */}
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <Info className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium text-foreground">Cách hoạt động</p>
+              <p className="text-muted-foreground mt-1">
+                • Tạo tài khoản tại đây để thêm thành viên vào hệ thống (mặc định role = Member)<br />
+                • Thêm thành viên vào project tại trang chi tiết project và gán vai trò (Member/Leader) riêng cho project đó<br />
+                • Một tài khoản có thể có vai trò khác nhau ở các project khác nhau
+              </p>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Password Update Dialog */}
-        <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Đổi mật khẩu</DialogTitle>
-              <DialogDescription>
-                Đổi mật khẩu cho {selectedMember?.full_name}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="updatePassword">Mật khẩu mới</Label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="updatePassword"
-                    type="password"
-                    placeholder="Tối thiểu 6 ký tự"
-                    className="pl-10"
-                    value={updatePassword}
-                    onChange={(e) => setUpdatePassword(e.target.value)}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsPasswordDialogOpen(false)}>
-                  Hủy
-                </Button>
-                <Button type="submit" disabled={isCreating}>
-                  {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Cập nhật
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        {/* Search */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Tìm theo tên, MSSV hoặc email..."
+            className="pl-10 h-11"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
 
-        {/* Edit Member Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Chỉnh sửa thành viên</DialogTitle>
-              <DialogDescription>
-                Cập nhật thông tin cho {selectedMember?.full_name}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleEditMember} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="editFullName">Họ và tên</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="editFullName"
-                    placeholder="Nguyễn Văn A"
-                    className="pl-10"
-                    value={editFullName}
-                    onChange={(e) => setEditFullName(e.target.value)}
-                  />
-                </div>
+        {/* Members List */}
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              Danh sách thành viên ({filteredMembers.length})
+            </CardTitle>
+            <CardDescription>
+              Tất cả thành viên đã được phê duyệt trong hệ thống
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {filteredMembers.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p className="font-medium">
+                  {searchQuery ? 'Không tìm thấy thành viên' : 'Chưa có thành viên nào'}
+                </p>
+                {!searchQuery && (
+                  <p className="text-sm mt-1">Bấm "Tạo tài khoản mới" để bắt đầu</p>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="editStudentId">Mã số sinh viên</Label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="editStudentId"
-                    placeholder="31241234567"
-                    className="pl-10"
-                    value={editStudentId}
-                    onChange={(e) => setEditStudentId(e.target.value)}
-                  />
-                </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredMembers.map((member) => {
+                  const canManage = canManageMember(member.id);
+                  const isLeaderMember = isMemberLeader(member.id);
+                  
+                  return (
+                    <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+                      <Avatar className="w-12 h-12 border-2 border-background">
+                        <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                          {getInitials(member.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold truncate">{member.full_name}</p>
+                          {isLeaderMember && (
+                            <Badge className="bg-warning/10 text-warning text-xs gap-1">
+                              <Shield className="w-3 h-3" />
+                              Leader
+                            </Badge>
+                          )}
+                          {member.id === user?.id && (
+                            <Badge variant="outline" className="text-xs">Bạn</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>{member.student_id}</span>
+                          <span>•</span>
+                          <span className="truncate">{member.email}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Tạo: {new Date(member.created_at).toLocaleDateString('vi-VN')}
+                        </p>
+                      </div>
+                      
+                      {canManage && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-9 w-9">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditDialog(member)}>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Chỉnh sửa thông tin
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedMember(member);
+                              setIsPasswordDialogOpen(true);
+                            }}>
+                              <Key className="w-4 h-4 mr-2" />
+                              Đổi mật khẩu
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                setSelectedMember(member);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Xóa tài khoản
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="editEmail">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="editEmail"
-                    type="email"
-                    placeholder="email@ueh.edu.vn"
-                    className="pl-10"
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                  Hủy
-                </Button>
-                <Button type="submit" disabled={isCreating}>
-                  {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pencil className="w-4 h-4 mr-2" />}
-                  Cập nhật
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Xác nhận xóa thành viên</AlertDialogTitle>
-              <AlertDialogDescription>
-                Bạn có chắc chắn muốn xóa thành viên <strong>{selectedMember?.full_name}</strong>?
-                <br />
-                Hành động này không thể hoàn tác và sẽ xóa toàn bộ dữ liệu liên quan đến thành viên này.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Hủy</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteMember}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                disabled={isCreating}
-              >
-                {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
-                Xóa thành viên
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Change Password Dialog */}
+      <Dialog open={isPasswordDialogOpen} onOpenChange={(open) => {
+        setIsPasswordDialogOpen(open);
+        if (!open) {
+          setUpdatePassword('');
+          setSelectedMember(null);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-primary" />
+              Đổi mật khẩu
+            </DialogTitle>
+            <DialogDescription>
+              Đặt mật khẩu mới cho <span className="font-medium">{selectedMember?.full_name}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">Mật khẩu mới <span className="text-destructive">*</span></Label>
+              <Input
+                id="newPassword"
+                type="password"
+                placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
+                className="h-11"
+                value={updatePassword}
+                onChange={(e) => setUpdatePassword(e.target.value)}
+                minLength={6}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsPasswordDialogOpen(false)}>
+                Hủy
+              </Button>
+              <Button type="submit" disabled={isCreating || updatePassword.length < 6} className="min-w-28">
+                {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Đổi mật khẩu'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open);
+        if (!open) setSelectedMember(null);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-primary" />
+              Chỉnh sửa thông tin
+            </DialogTitle>
+            <DialogDescription>
+              Cập nhật thông tin tài khoản của <span className="font-medium">{selectedMember?.full_name}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditMember} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editFullName">Họ và tên <span className="text-destructive">*</span></Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="editFullName"
+                  className="pl-10 h-11"
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editStudentId">Mã số sinh viên <span className="text-destructive">*</span></Label>
+              <div className="relative">
+                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="editStudentId"
+                  className="pl-10 h-11"
+                  value={editStudentId}
+                  onChange={(e) => setEditStudentId(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editEmail">Email <span className="text-destructive">*</span></Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="editEmail"
+                  type="email"
+                  className="pl-10 h-11"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Hủy
+              </Button>
+              <Button type="submit" disabled={isCreating} className="min-w-28">
+                {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Lưu thay đổi'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        setIsDeleteDialogOpen(open);
+        if (!open) setSelectedMember(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận xóa tài khoản</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa tài khoản <span className="font-semibold">{selectedMember?.full_name}</span> khỏi hệ thống?
+              <br /><br />
+              <span className="text-destructive font-medium">
+                Cảnh báo: Thao tác này sẽ xóa vĩnh viễn tài khoản và tất cả dữ liệu liên quan. Không thể hoàn tác.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCreating}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteMember}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isCreating}
+            >
+              {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Xóa tài khoản'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
