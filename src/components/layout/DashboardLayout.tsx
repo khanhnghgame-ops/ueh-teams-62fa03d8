@@ -33,13 +33,13 @@ interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  requiresLeader?: boolean;
+  requiresAdmin?: boolean;
 }
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/groups', icon: FolderKanban },
-  { name: 'Thành viên hệ thống', href: '/members', icon: Users, requiresLeader: true },
+  { name: 'Thành viên hệ thống', href: '/members', icon: Users, requiresAdmin: true },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -83,7 +83,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Center: Navigation Menu */}
           <nav className="hidden md:flex items-center gap-1">
             {navigation
-              .filter(item => !item.requiresLeader || isLeader || isAdmin)
+              .filter(item => !item.requiresAdmin || isAdmin)
               .map((item) => {
                 const isActive = location.pathname === item.href || 
                   (item.href === '/groups' && location.pathname.startsWith('/groups/'));
@@ -166,7 +166,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="md:hidden absolute top-16 left-0 right-0 bg-primary border-t border-white/10 shadow-lg">
             <nav className="p-4 space-y-2">
               {navigation
-                .filter(item => !item.requiresLeader || isLeader || isAdmin)
+                .filter(item => !item.requiresAdmin || isAdmin)
                 .map((item) => {
                   const isActive = location.pathname === item.href;
                   return (

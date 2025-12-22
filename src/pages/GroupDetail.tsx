@@ -237,16 +237,160 @@ export default function GroupDetail() {
                     </Dialog>
                     <Dialog open={isTaskDialogOpen} onOpenChange={(open) => { setIsTaskDialogOpen(open); if (open && stages.length > 0) setNewTaskStageId(stages[0].id); }}>
                       <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2" />Tạo task</Button></DialogTrigger>
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader><DialogTitle>Tạo task mới</DialogTitle></DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2"><Label>Tên task *</Label><Input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} /></div>
-                          <div className="space-y-2"><Label>Mô tả</Label><Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} /></div>
-                          {stages.length > 0 && <div className="space-y-2"><Label>Giai đoạn *</Label><Select value={newTaskStageId} onValueChange={setNewTaskStageId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{stages.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>}
-                          <div className="space-y-2"><Label>Deadline</Label><Input type="datetime-local" value={newTaskDeadline} onChange={e => setNewTaskDeadline(e.target.value)} /></div>
-                          <div className="space-y-2"><Label>Giao cho</Label><div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">{members.map(m => <div key={m.id} className="flex items-center gap-2"><Checkbox id={`a-${m.user_id}`} checked={newTaskAssignees.includes(m.user_id)} onCheckedChange={c => c ? setNewTaskAssignees([...newTaskAssignees, m.user_id]) : setNewTaskAssignees(newTaskAssignees.filter(id => id !== m.user_id))} /><label htmlFor={`a-${m.user_id}`} className="text-sm">{m.profiles?.full_name}</label></div>)}</div></div>
+                      <DialogContent className="max-w-4xl w-[95vw] p-0 overflow-hidden">
+                        <DialogHeader className="px-6 py-4 border-b bg-muted/30">
+                          <div className="flex items-center gap-3">
+                            <div className="p-3 rounded-xl bg-primary/10">
+                              <Plus className="w-6 h-6 text-primary" />
+                            </div>
+                            <div>
+                              <DialogTitle className="text-xl font-bold">Tạo task mới</DialogTitle>
+                              <DialogDescription className="text-sm mt-0.5">Điền thông tin để tạo task cho project</DialogDescription>
+                            </div>
+                          </div>
+                        </DialogHeader>
+                        
+                        <div className="p-6">
+                          <div className="grid lg:grid-cols-2 gap-6">
+                            {/* Left Column - Basic Info */}
+                            <div className="space-y-5">
+                              <div className="p-4 rounded-xl border-2 bg-card space-y-4">
+                                <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full bg-primary" />
+                                  Thông tin cơ bản
+                                </h3>
+                                <div className="space-y-2">
+                                  <Label className="text-sm font-medium">Tên task <span className="text-destructive">*</span></Label>
+                                  <Input 
+                                    value={newTaskTitle} 
+                                    onChange={e => setNewTaskTitle(e.target.value)} 
+                                    placeholder="VD: Hoàn thành báo cáo chương 1"
+                                    className="h-11"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-sm font-medium">Mô tả chi tiết</Label>
+                                  <Textarea 
+                                    value={newTaskDescription} 
+                                    onChange={e => setNewTaskDescription(e.target.value)} 
+                                    placeholder="Mô tả công việc cần thực hiện..."
+                                    rows={4}
+                                    className="resize-none"
+                                  />
+                                </div>
+                              </div>
+                              
+                              <div className="p-4 rounded-xl border-2 bg-card space-y-4">
+                                <h3 className="text-sm font-semibold text-warning flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full bg-warning" />
+                                  Thời gian & Giai đoạn
+                                </h3>
+                                <div className="grid sm:grid-cols-2 gap-4">
+                                  {stages.length > 0 && (
+                                    <div className="space-y-2">
+                                      <Label className="text-sm font-medium">Giai đoạn <span className="text-destructive">*</span></Label>
+                                      <Select value={newTaskStageId} onValueChange={setNewTaskStageId}>
+                                        <SelectTrigger className="h-11">
+                                          <SelectValue placeholder="Chọn giai đoạn" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {stages.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
+                                  <div className="space-y-2">
+                                    <Label className="text-sm font-medium">Deadline</Label>
+                                    <Input 
+                                      type="datetime-local" 
+                                      value={newTaskDeadline} 
+                                      onChange={e => setNewTaskDeadline(e.target.value)}
+                                      className="h-11"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Right Column - Assignees */}
+                            <div className="space-y-5">
+                              <div className="p-4 rounded-xl border-2 bg-card h-full">
+                                <h3 className="text-sm font-semibold text-accent-foreground flex items-center gap-2 mb-4">
+                                  <div className="w-2 h-2 rounded-full bg-accent" />
+                                  Giao việc cho thành viên
+                                </h3>
+                                <div className="border-2 rounded-xl bg-muted/30 p-1 max-h-[280px] overflow-y-auto">
+                                  {members.length === 0 ? (
+                                    <div className="text-center py-8 text-muted-foreground text-sm">
+                                      Chưa có thành viên trong project
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      {members.map(m => (
+                                        <div 
+                                          key={m.id} 
+                                          className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                            newTaskAssignees.includes(m.user_id) 
+                                              ? 'bg-primary/10 border-2 border-primary/30' 
+                                              : 'hover:bg-muted/50'
+                                          }`}
+                                          onClick={() => {
+                                            if (newTaskAssignees.includes(m.user_id)) {
+                                              setNewTaskAssignees(newTaskAssignees.filter(id => id !== m.user_id));
+                                            } else {
+                                              setNewTaskAssignees([...newTaskAssignees, m.user_id]);
+                                            }
+                                          }}
+                                        >
+                                          <Checkbox 
+                                            id={`a-${m.user_id}`} 
+                                            checked={newTaskAssignees.includes(m.user_id)} 
+                                            onCheckedChange={c => c ? setNewTaskAssignees([...newTaskAssignees, m.user_id]) : setNewTaskAssignees(newTaskAssignees.filter(id => id !== m.user_id))} 
+                                          />
+                                          <div className="flex-1">
+                                            <label htmlFor={`a-${m.user_id}`} className="text-sm font-medium cursor-pointer">
+                                              {m.profiles?.full_name}
+                                            </label>
+                                            <p className="text-xs text-muted-foreground">{m.profiles?.student_id}</p>
+                                          </div>
+                                          {m.role === 'leader' && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/20 text-warning font-medium">
+                                              Leader
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                {newTaskAssignees.length > 0 && (
+                                  <p className="text-xs text-muted-foreground mt-3">
+                                    Đã chọn <span className="font-semibold text-primary">{newTaskAssignees.length}</span> thành viên
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <DialogFooter><Button variant="outline" onClick={() => setIsTaskDialogOpen(false)}>Hủy</Button><Button onClick={handleCreateTask} disabled={isCreatingTask}>{isCreatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tạo'}</Button></DialogFooter>
+                        
+                        <DialogFooter className="px-6 py-4 border-t bg-muted/30 gap-2">
+                          <Button variant="outline" onClick={() => setIsTaskDialogOpen(false)} className="min-w-24">
+                            Hủy
+                          </Button>
+                          <Button onClick={handleCreateTask} disabled={isCreatingTask} className="min-w-32 gap-2">
+                            {isCreatingTask ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Đang tạo...
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="w-4 h-4" />
+                                Tạo task
+                              </>
+                            )}
+                          </Button>
+                        </DialogFooter>
                       </DialogContent>
                     </Dialog>
                   </>
