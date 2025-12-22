@@ -45,6 +45,7 @@ export default function GroupDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLeaderInGroup, setIsLeaderInGroup] = useState(false);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Dialogs
   const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
@@ -218,7 +219,6 @@ export default function GroupDetail() {
   if (isLoading) return <DashboardLayout><div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></DashboardLayout>;
   if (!group) return <DashboardLayout><div className="text-center py-16"><h1 className="text-2xl font-bold mb-2">Không tìm thấy project</h1><Link to="/groups"><Button>Quay lại</Button></Link></div></DashboardLayout>;
 
-  const [activeTab, setActiveTab] = useState('overview');
 
   return (
     <DashboardLayout>
