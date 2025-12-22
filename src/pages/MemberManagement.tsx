@@ -96,12 +96,14 @@ export default function MemberManagement() {
   };
 
   useEffect(() => {
-    if (!authLoading && !isAdmin && !isLeader) {
+    if (!authLoading && !isAdmin) {
       navigate('/dashboard');
       return;
     }
-    fetchMembers();
-  }, [authLoading, isAdmin, isLeader, navigate]);
+    if (isAdmin) {
+      fetchMembers();
+    }
+  }, [authLoading, isAdmin, navigate]);
 
   const fetchMembers = async () => {
     setIsLoading(true);
