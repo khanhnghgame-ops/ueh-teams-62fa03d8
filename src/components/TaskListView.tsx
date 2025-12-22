@@ -236,17 +236,24 @@ export default function TaskListView({
     const isAssignee = isUserAssignee(task);
     const canSubmit = isLeaderInGroup || (isAssignee && !taskIsOverdue);
 
+    // Leader can click to edit, Member cannot click task
+    const handleTaskClick = () => {
+      if (isLeaderInGroup) {
+        onEditTask(task);
+      }
+    };
+
     return (
       <div className={`group flex items-center gap-4 p-4 bg-card border rounded-xl transition-all ${
         taskIsOverdue ? 'border-destructive/30 bg-destructive/5' : 'hover:shadow-md'
       }`}>
-        {/* Task Title - Click to View/Edit */}
+        {/* Task Title - Only Leader can click to edit */}
         <div 
-          className="flex-1 min-w-0 cursor-pointer"
-          onClick={() => onEditTask(task)}
+          className={`flex-1 min-w-0 ${isLeaderInGroup ? 'cursor-pointer' : ''}`}
+          onClick={handleTaskClick}
         >
           <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-sm truncate group-hover:text-primary transition-colors">
+            <h4 className={`font-semibold text-sm truncate ${isLeaderInGroup ? 'group-hover:text-primary transition-colors' : ''}`}>
               {task.title}
             </h4>
             {taskIsOverdue && (

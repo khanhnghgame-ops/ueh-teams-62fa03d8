@@ -218,6 +218,8 @@ export default function GroupDetail() {
   if (isLoading) return <DashboardLayout><div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></DashboardLayout>;
   if (!group) return <DashboardLayout><div className="text-center py-16"><h1 className="text-2xl font-bold mb-2">Không tìm thấy project</h1><Link to="/groups"><Button>Quay lại</Button></Link></div></DashboardLayout>;
 
+  const [activeTab, setActiveTab] = useState('overview');
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -227,68 +229,78 @@ export default function GroupDetail() {
             <h1 className="text-3xl font-bold">{group.name}</h1>
             {group.description && <p className="text-muted-foreground mt-1">{group.description}</p>}
           </div>
-          {isLeaderInGroup && (
-            <div className="flex gap-2">
-              <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
-                <DialogTrigger asChild><Button variant="outline"><UserPlus className="w-4 h-4 mr-2" />Thêm thành viên</Button></DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>Thêm thành viên</DialogTitle></DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Chọn thành viên</Label>
-                      <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                        <SelectTrigger><SelectValue placeholder="Chọn..." /></SelectTrigger>
-                        <SelectContent>{availableProfiles.map(p => <SelectItem key={p.id} value={p.id}>{p.full_name} ({p.student_id})</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Vai trò</Label>
-                      <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as 'member' | 'leader')}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="member">Thành viên</SelectItem><SelectItem value="leader">Phó nhóm</SelectItem></SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter><Button variant="outline" onClick={() => setIsMemberDialogOpen(false)}>Hủy</Button><Button onClick={handleAddMember} disabled={isAddingMember}>{isAddingMember ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Thêm'}</Button></DialogFooter>
-                </DialogContent>
-              </Dialog>
-              <Dialog open={isStageDialogOpen} onOpenChange={setIsStageDialogOpen}>
-                <DialogTrigger asChild><Button variant="outline"><Layers className="w-4 h-4 mr-2" />Tạo giai đoạn</Button></DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>Tạo giai đoạn mới</DialogTitle></DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2"><Label>Tên giai đoạn</Label><Input value={newStageName} onChange={e => setNewStageName(e.target.value)} placeholder="VD: Giai đoạn 1" /></div>
-                    <div className="space-y-2"><Label>Mô tả</Label><Textarea value={newStageDescription} onChange={e => setNewStageDescription(e.target.value)} /></div>
-                  </div>
-                  <DialogFooter><Button variant="outline" onClick={() => setIsStageDialogOpen(false)}>Hủy</Button><Button onClick={handleCreateStage} disabled={isCreatingStage}>{isCreatingStage ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tạo'}</Button></DialogFooter>
-                </DialogContent>
-              </Dialog>
-              <Dialog open={isTaskDialogOpen} onOpenChange={(open) => { setIsTaskDialogOpen(open); if (open && stages.length > 0) setNewTaskStageId(stages[0].id); }}>
-                <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-2" />Tạo task</Button></DialogTrigger>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader><DialogTitle>Tạo task mới</DialogTitle></DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2"><Label>Tên task *</Label><Input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Mô tả</Label><Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} /></div>
-                    {stages.length > 0 && <div className="space-y-2"><Label>Giai đoạn *</Label><Select value={newTaskStageId} onValueChange={setNewTaskStageId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{stages.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>}
-                    <div className="space-y-2"><Label>Deadline</Label><Input type="datetime-local" value={newTaskDeadline} onChange={e => setNewTaskDeadline(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Giao cho</Label><div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">{members.map(m => <div key={m.id} className="flex items-center gap-2"><Checkbox id={`a-${m.user_id}`} checked={newTaskAssignees.includes(m.user_id)} onCheckedChange={c => c ? setNewTaskAssignees([...newTaskAssignees, m.user_id]) : setNewTaskAssignees(newTaskAssignees.filter(id => id !== m.user_id))} /><label htmlFor={`a-${m.user_id}`} className="text-sm">{m.profiles?.full_name}</label></div>)}</div></div>
-                  </div>
-                  <DialogFooter><Button variant="outline" onClick={() => setIsTaskDialogOpen(false)}>Hủy</Button><Button onClick={handleCreateTask} disabled={isCreatingTask}>{isCreatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tạo'}</Button></DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          )}
         </div>
 
-        <Tabs defaultValue="overview">
-          <TabsList>
-            <TabsTrigger value="overview" className="gap-2"><LayoutDashboard className="w-4 h-4" />Tổng quan</TabsTrigger>
-            <TabsTrigger value="tasks" className="gap-2"><Layers className="w-4 h-4" />Task & Giai đoạn</TabsTrigger>
-            <TabsTrigger value="members" className="gap-2"><Users className="w-4 h-4" />Thành viên ({members.length})</TabsTrigger>
-            <TabsTrigger value="logs" className="gap-2"><Activity className="w-4 h-4" />Nhật ký</TabsTrigger>
-            {isLeaderInGroup && group.created_by === user?.id && <TabsTrigger value="settings" className="gap-2"><Settings className="w-4 h-4" />Cài đặt</TabsTrigger>}
-          </TabsList>
+        <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <TabsList>
+              <TabsTrigger value="overview" className="gap-2"><LayoutDashboard className="w-4 h-4" />Tổng quan</TabsTrigger>
+              <TabsTrigger value="tasks" className="gap-2"><Layers className="w-4 h-4" />Task & Giai đoạn</TabsTrigger>
+              <TabsTrigger value="members" className="gap-2"><Users className="w-4 h-4" />Thành viên ({members.length})</TabsTrigger>
+              <TabsTrigger value="logs" className="gap-2"><Activity className="w-4 h-4" />Nhật ký</TabsTrigger>
+              {isLeaderInGroup && group.created_by === user?.id && <TabsTrigger value="settings" className="gap-2"><Settings className="w-4 h-4" />Cài đặt</TabsTrigger>}
+            </TabsList>
+
+            {/* Contextual Action Buttons for Leader */}
+            {isLeaderInGroup && (
+              <div className="flex gap-2">
+                {activeTab === 'tasks' && (
+                  <>
+                    <Dialog open={isStageDialogOpen} onOpenChange={setIsStageDialogOpen}>
+                      <DialogTrigger asChild><Button variant="outline" size="sm"><Layers className="w-4 h-4 mr-2" />Tạo giai đoạn</Button></DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>Tạo giai đoạn mới</DialogTitle></DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2"><Label>Tên giai đoạn</Label><Input value={newStageName} onChange={e => setNewStageName(e.target.value)} placeholder="VD: Giai đoạn 1" /></div>
+                          <div className="space-y-2"><Label>Mô tả</Label><Textarea value={newStageDescription} onChange={e => setNewStageDescription(e.target.value)} /></div>
+                        </div>
+                        <DialogFooter><Button variant="outline" onClick={() => setIsStageDialogOpen(false)}>Hủy</Button><Button onClick={handleCreateStage} disabled={isCreatingStage}>{isCreatingStage ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tạo'}</Button></DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                    <Dialog open={isTaskDialogOpen} onOpenChange={(open) => { setIsTaskDialogOpen(open); if (open && stages.length > 0) setNewTaskStageId(stages[0].id); }}>
+                      <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2" />Tạo task</Button></DialogTrigger>
+                      <DialogContent className="max-w-lg">
+                        <DialogHeader><DialogTitle>Tạo task mới</DialogTitle></DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2"><Label>Tên task *</Label><Input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} /></div>
+                          <div className="space-y-2"><Label>Mô tả</Label><Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} /></div>
+                          {stages.length > 0 && <div className="space-y-2"><Label>Giai đoạn *</Label><Select value={newTaskStageId} onValueChange={setNewTaskStageId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{stages.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>}
+                          <div className="space-y-2"><Label>Deadline</Label><Input type="datetime-local" value={newTaskDeadline} onChange={e => setNewTaskDeadline(e.target.value)} /></div>
+                          <div className="space-y-2"><Label>Giao cho</Label><div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">{members.map(m => <div key={m.id} className="flex items-center gap-2"><Checkbox id={`a-${m.user_id}`} checked={newTaskAssignees.includes(m.user_id)} onCheckedChange={c => c ? setNewTaskAssignees([...newTaskAssignees, m.user_id]) : setNewTaskAssignees(newTaskAssignees.filter(id => id !== m.user_id))} /><label htmlFor={`a-${m.user_id}`} className="text-sm">{m.profiles?.full_name}</label></div>)}</div></div>
+                        </div>
+                        <DialogFooter><Button variant="outline" onClick={() => setIsTaskDialogOpen(false)}>Hủy</Button><Button onClick={handleCreateTask} disabled={isCreatingTask}>{isCreatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tạo'}</Button></DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </>
+                )}
+                {activeTab === 'members' && (
+                  <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
+                    <DialogTrigger asChild><Button size="sm"><UserPlus className="w-4 h-4 mr-2" />Thêm thành viên</Button></DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle>Thêm thành viên</DialogTitle></DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label>Chọn thành viên</Label>
+                          <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                            <SelectTrigger><SelectValue placeholder="Chọn..." /></SelectTrigger>
+                            <SelectContent>{availableProfiles.map(p => <SelectItem key={p.id} value={p.id}>{p.full_name} ({p.student_id})</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Vai trò</Label>
+                          <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as 'member' | 'leader')}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent><SelectItem value="member">Thành viên</SelectItem><SelectItem value="leader">Phó nhóm</SelectItem></SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <DialogFooter><Button variant="outline" onClick={() => setIsMemberDialogOpen(false)}>Hủy</Button><Button onClick={handleAddMember} disabled={isAddingMember}>{isAddingMember ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Thêm'}</Button></DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
+            )}
+          </div>
 
           <TabsContent value="overview" className="mt-6">
             <div className="grid lg:grid-cols-3 gap-6">
