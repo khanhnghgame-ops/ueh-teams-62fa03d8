@@ -39,7 +39,7 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/groups', icon: FolderKanban },
-  { name: 'Thành viên', href: '/members', icon: Users, requiresLeader: true },
+  { name: 'Thành viên hệ thống', href: '/members', icon: Users, requiresLeader: true },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
