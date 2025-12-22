@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import {
   Select,
   SelectContent,
@@ -22,14 +24,10 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Plus, Trash2, ExternalLink, Lock, AlertTriangle } from 'lucide-react';
+import { Loader2, Lock, AlertTriangle, Eye, Calendar, Users, FileText, Layers } from 'lucide-react';
 import type { Task, Stage, GroupMember, TaskStatus } from '@/types/database';
-
-interface SubmissionLink {
-  id?: string;
-  title: string;
-  url: string;
-}
+import { format } from 'date-fns';
+import { vi } from 'date-fns/locale';
 
 interface TaskEditDialogProps {
   task: Task | null;
@@ -51,7 +49,7 @@ export default function TaskEditDialog({
   canEdit: canEditProp,
 }: TaskEditDialogProps) {
   const { toast } = useToast();
-  const { user, isLeader, isAdmin } = useAuth();
+  const { user, isLeader, isAdmin, profile } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   
   const [title, setTitle] = useState('');
@@ -59,15 +57,15 @@ export default function TaskEditDialog({
   const [deadline, setDeadline] = useState('');
   const [stageId, setStageId] = useState<string>('');
   const [status, setStatus] = useState<TaskStatus>('TODO');
-  const [submissionLinks, setSubmissionLinks] = useState<SubmissionLink[]>([]);
   const [assignees, setAssignees] = useState<string[]>([]);
 
   // Check if task is overdue
   const isOverdue = task?.deadline ? new Date(task.deadline) < new Date() : false;
-  
-  // Member can edit only if not overdue OR is leader/admin
   const isLeaderOrAdmin = isLeader || isAdmin;
-  const canEdit = canEditProp && (isLeaderOrAdmin || !isOverdue);
+  
+  // Only leader can edit task details (title, description, deadline, stage, assignees)
+  const canEditDetails = canEditProp && isLeaderOrAdmin;
+  // This dialog is now ONLY for viewing/editing task metadata by leader
 
   useEffect(() => {
     if (task) {
@@ -76,35 +74,12 @@ export default function TaskEditDialog({
       setDeadline(task.deadline ? task.deadline.slice(0, 16) : '');
       setStageId(task.stage_id || '');
       setStatus(task.status);
-      
-      // Parse submission links - support multiple links stored as JSON
-      try {
-        const links = task.submission_link ? JSON.parse(task.submission_link) : [];
-        setSubmissionLinks(Array.isArray(links) ? links : [{ title: 'Bài nộp', url: task.submission_link }]);
-      } catch {
-        setSubmissionLinks(task.submission_link ? [{ title: 'Bài nộp', url: task.submission_link }] : []);
-      }
-      
       setAssignees(task.task_assignments?.map(a => a.user_id) || []);
     }
   }, [task]);
 
-  const addSubmissionLink = () => {
-    setSubmissionLinks([...submissionLinks, { title: '', url: '' }]);
-  };
-
-  const removeSubmissionLink = (index: number) => {
-    setSubmissionLinks(submissionLinks.filter((_, i) => i !== index));
-  };
-
-  const updateSubmissionLink = (index: number, field: 'title' | 'url', value: string) => {
-    const updated = [...submissionLinks];
-    updated[index][field] = value;
-    setSubmissionLinks(updated);
-  };
-
   const handleSave = async () => {
-    if (!task || !canEdit) return;
+    if (!task || !canEditDetails) return;
     if (!title.trim()) {
       toast({
         title: 'Lỗi',
@@ -117,11 +92,7 @@ export default function TaskEditDialog({
     setIsLoading(true);
 
     try {
-      // Filter out empty submission links and store as JSON
-      const validLinks = submissionLinks.filter(l => l.url.trim());
-      const submissionLinkJson = validLinks.length > 0 ? JSON.stringify(validLinks) : null;
-
-      // Update task
+      // Update task details
       const { error: taskError } = await supabase
         .from('tasks')
         .update({
@@ -130,42 +101,32 @@ export default function TaskEditDialog({
           deadline: deadline || null,
           stage_id: stageId || null,
           status,
-          submission_link: submissionLinkJson,
         })
         .eq('id', task.id);
 
       if (taskError) throw taskError;
 
-      // Log submission time if member is submitting
-      if (!isLeaderOrAdmin && validLinks.length > 0) {
-        const now = new Date();
-        const isLateSubmission = task.deadline && now > new Date(task.deadline);
-        
-        await supabase.from('activity_logs').insert({
-          user_id: user!.id,
-          user_name: user?.email || 'Unknown',
-          action: isLateSubmission ? 'LATE_SUBMISSION' : 'SUBMISSION',
-          action_type: 'task',
-          description: isLateSubmission 
-            ? `Nộp bài trễ ${Math.round((now.getTime() - new Date(task.deadline!).getTime()) / (1000 * 60 * 60))} giờ`
-            : 'Đã nộp bài đúng hạn',
-          group_id: task.group_id,
-          metadata: { task_id: task.id, task_title: task.title, deadline: task.deadline }
-        });
+      // Update assignments
+      await supabase.from('task_assignments').delete().eq('task_id', task.id);
+
+      if (assignees.length > 0) {
+        const assignments = assignees.map((userId) => ({
+          task_id: task.id,
+          user_id: userId,
+        }));
+        await supabase.from('task_assignments').insert(assignments);
       }
 
-      // Update assignments (only leader can change)
-      if (isLeaderOrAdmin) {
-        await supabase.from('task_assignments').delete().eq('task_id', task.id);
-
-        if (assignees.length > 0) {
-          const assignments = assignees.map((userId) => ({
-            task_id: task.id,
-            user_id: userId,
-          }));
-          await supabase.from('task_assignments').insert(assignments);
-        }
-      }
+      // Log activity
+      await supabase.from('activity_logs').insert({
+        user_id: user!.id,
+        user_name: profile?.full_name || user?.email || 'Unknown',
+        action: 'UPDATE_TASK',
+        action_type: 'task',
+        description: `Cập nhật task "${title.trim()}"`,
+        group_id: task.group_id,
+        metadata: { task_id: task.id, task_title: title.trim() }
+      });
 
       toast({
         title: 'Đã lưu',
@@ -185,232 +146,275 @@ export default function TaskEditDialog({
     }
   };
 
+  const getStatusConfig = (s: TaskStatus) => {
+    switch (s) {
+      case 'TODO':
+        return { label: 'Chờ làm', color: 'bg-muted text-muted-foreground' };
+      case 'IN_PROGRESS':
+        return { label: 'Đang làm', color: 'bg-warning/10 text-warning border-warning/50' };
+      case 'DONE':
+        return { label: 'Hoàn thành', color: 'bg-primary/10 text-primary border-primary/50' };
+      case 'VERIFIED':
+        return { label: 'Đã duyệt', color: 'bg-success/10 text-success border-success/50' };
+      default:
+        return { label: s, color: 'bg-muted' };
+    }
+  };
+
+  const statusConfig = task ? getStatusConfig(task.status) : getStatusConfig('TODO');
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader className="space-y-3 pb-4 border-b">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-semibold">
-              {canEdit ? 'Chỉnh sửa task' : 'Chi tiết task'}
-            </DialogTitle>
-            {isOverdue && !isLeaderOrAdmin && (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${canEditDetails ? 'bg-primary/10' : 'bg-muted'}`}>
+                {canEditDetails ? (
+                  <FileText className="w-5 h-5 text-primary" />
+                ) : (
+                  <Eye className="w-5 h-5 text-muted-foreground" />
+                )}
+              </div>
+              <DialogTitle className="text-xl font-semibold">
+                {canEditDetails ? 'Chỉnh sửa task' : 'Chi tiết task'}
+              </DialogTitle>
+            </div>
+            <Badge className={`${statusConfig.color} border`}>
+              {statusConfig.label}
+            </Badge>
+          </div>
+          
+          {/* Permission indicators */}
+          <div className="flex flex-wrap gap-2">
+            {!isLeaderOrAdmin && (
+              <Badge variant="secondary" className="gap-1">
+                <Eye className="w-3 h-3" />
+                Chế độ xem
+              </Badge>
+            )}
+            {isOverdue && (
               <Badge variant="destructive" className="gap-1">
-                <Lock className="w-3 h-3" />
-                Đã quá hạn - Chỉ xem
+                <AlertTriangle className="w-3 h-3" />
+                Quá deadline
               </Badge>
             )}
           </div>
-          {!canEditProp && (
-            <p className="text-sm text-muted-foreground">
-              Chỉ Leader/Phó nhóm được chỉnh sửa
-            </p>
-          )}
         </DialogHeader>
         
-        <div className="space-y-6 py-4">
-          {/* Task Title */}
-          <div className="space-y-2">
-            <Label htmlFor="task-title" className="text-sm font-medium">
-              Tên task <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="task-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={!canEdit}
-              placeholder="Nhập tên task..."
-              className="h-11"
-            />
-          </div>
-          
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="task-description" className="text-sm font-medium">Mô tả</Label>
-            <Textarea
-              id="task-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              disabled={!canEdit}
-              placeholder="Mô tả chi tiết task..."
-              rows={3}
-              className="resize-none"
-            />
-          </div>
-
-          {/* Stage & Status Row */}
-          <div className="grid grid-cols-2 gap-4">
+        <ScrollArea className="flex-1 pr-4">
+          <div className="space-y-6 py-4">
+            {/* Task Title */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Giai đoạn</Label>
-              <Select value={stageId} onValueChange={setStageId} disabled={!canEdit || !isLeaderOrAdmin}>
-                <SelectTrigger className="h-11">
-                  <SelectValue placeholder="Chọn giai đoạn..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {stages.map((stage) => (
-                    <SelectItem key={stage.id} value={stage.id}>
-                      {stage.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Trạng thái</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)} disabled={!canEdit}>
-                <SelectTrigger className="h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TODO">
-                    <span className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-muted-foreground" />
-                      Chờ làm
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="IN_PROGRESS">
-                    <span className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-warning" />
-                      Đang làm
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="DONE">
-                    <span className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
-                      Hoàn thành
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="VERIFIED">
-                    <span className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-success" />
-                      Đã duyệt
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Deadline */}
-          <div className="space-y-2">
-            <Label htmlFor="task-deadline" className="text-sm font-medium">Deadline</Label>
-            <Input
-              id="task-deadline"
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              disabled={!canEdit || !isLeaderOrAdmin}
-              className="h-11"
-            />
-            {isOverdue && task?.deadline && (
-              <div className="flex items-center gap-2 text-destructive text-sm">
-                <AlertTriangle className="w-4 h-4" />
-                <span>Task đã quá hạn từ {new Date(task.deadline).toLocaleDateString('vi-VN')}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Submission Links - Multiple */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Liên kết nộp bài</Label>
-              {canEdit && (
-                <Button type="button" variant="outline" size="sm" onClick={addSubmissionLink} className="gap-1 h-8">
-                  <Plus className="w-3 h-3" />
-                  Thêm link
-                </Button>
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                Tên task {canEditDetails && <span className="text-destructive">*</span>}
+              </Label>
+              {canEditDetails ? (
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Nhập tên task..."
+                  className="h-11"
+                />
+              ) : (
+                <div className="p-3 rounded-lg bg-muted/50 border">
+                  <p className="font-medium">{task?.title}</p>
+                </div>
               )}
             </div>
             
-            {submissionLinks.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">Chưa có liên kết nộp bài</p>
-            ) : (
-              <div className="space-y-3">
-                {submissionLinks.map((link, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30">
-                    <div className="flex-1 grid grid-cols-2 gap-3">
-                      <Input
-                        placeholder="Tiêu đề (VD: File Word)"
-                        value={link.title}
-                        onChange={(e) => updateSubmissionLink(index, 'title', e.target.value)}
-                        disabled={!canEdit}
-                        className="h-9"
-                      />
-                      <Input
-                        placeholder="https://..."
-                        value={link.url}
-                        onChange={(e) => updateSubmissionLink(index, 'url', e.target.value)}
-                        disabled={!canEdit}
-                        className="h-9"
-                      />
-                    </div>
-                    {link.url && (
-                      <a href={link.url} target="_blank" rel="noopener noreferrer">
-                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9">
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
-                      </a>
-                    )}
-                    {canEdit && (
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => removeSubmissionLink(index)}
-                        className="h-9 w-9 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Assignees - Only Leader can edit */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Người phụ trách</Label>
-            <div className="border rounded-lg p-4 max-h-48 overflow-y-auto bg-muted/20">
-              {members.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Chưa có thành viên nào</p>
+            {/* Description */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Mô tả</Label>
+              {canEditDetails ? (
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Mô tả chi tiết task..."
+                  rows={3}
+                  className="resize-none"
+                />
               ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {members.map((member) => (
-                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50">
-                      <Checkbox
-                        id={`assignee-${member.user_id}`}
-                        checked={assignees.includes(member.user_id)}
-                        onCheckedChange={(checked) => {
-                          if (!canEdit || !isLeaderOrAdmin) return;
-                          if (checked) {
-                            setAssignees([...assignees, member.user_id]);
-                          } else {
-                            setAssignees(assignees.filter((id) => id !== member.user_id));
-                          }
-                        }}
-                        disabled={!canEdit || !isLeaderOrAdmin}
-                      />
-                      <label
-                        htmlFor={`assignee-${member.user_id}`}
-                        className="text-sm cursor-pointer flex-1"
-                      >
-                        <span className="font-medium">{member.profiles?.full_name}</span>
-                        <span className="text-muted-foreground ml-1">({member.profiles?.student_id})</span>
-                      </label>
+                <div className="p-3 rounded-lg bg-muted/50 border min-h-[80px]">
+                  <p className="text-sm text-muted-foreground">
+                    {task?.description || 'Không có mô tả'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Stage & Status Row */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-muted-foreground" />
+                  Giai đoạn
+                </Label>
+                {canEditDetails ? (
+                  <Select value={stageId} onValueChange={setStageId}>
+                    <SelectTrigger className="h-11">
+                      <SelectValue placeholder="Chọn giai đoạn..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stages.map((stage) => (
+                        <SelectItem key={stage.id} value={stage.id}>
+                          {stage.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="p-3 rounded-lg bg-muted/50 border h-11 flex items-center">
+                    <span className="text-sm">
+                      {stages.find(s => s.id === task?.stage_id)?.name || 'Chưa phân giai đoạn'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Trạng thái</Label>
+                {canEditDetails ? (
+                  <Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)}>
+                    <SelectTrigger className="h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TODO">
+                        <span className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-muted-foreground" />
+                          Chờ làm
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="IN_PROGRESS">
+                        <span className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-warning" />
+                          Đang làm
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="DONE">
+                        <span className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-primary" />
+                          Hoàn thành
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="VERIFIED">
+                        <span className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-success" />
+                          Đã duyệt
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="p-3 rounded-lg bg-muted/50 border h-11 flex items-center">
+                    <Badge className={`${statusConfig.color} border`}>
+                      {statusConfig.label}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Deadline */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                Deadline
+              </Label>
+              {canEditDetails ? (
+                <Input
+                  type="datetime-local"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  className="h-11"
+                />
+              ) : (
+                <div className={`p-3 rounded-lg border h-11 flex items-center gap-2 ${isOverdue ? 'bg-destructive/10 border-destructive/30' : 'bg-muted/50'}`}>
+                  {task?.deadline ? (
+                    <>
+                      <span className={`text-sm ${isOverdue ? 'text-destructive font-medium' : ''}`}>
+                        {format(new Date(task.deadline), "dd/MM/yyyy 'lúc' HH:mm", { locale: vi })}
+                      </span>
+                      {isOverdue && (
+                        <Badge variant="destructive" className="text-xs">Quá hạn</Badge>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Không có deadline</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Assignees */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Users className="w-4 h-4 text-muted-foreground" />
+                Người phụ trách
+              </Label>
+              
+              {canEditDetails ? (
+                <div className="border rounded-lg p-4 max-h-48 overflow-y-auto bg-muted/20">
+                  {members.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Chưa có thành viên nào</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {members.map((member) => (
+                        <div key={member.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50">
+                          <Checkbox
+                            id={`assignee-${member.user_id}`}
+                            checked={assignees.includes(member.user_id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setAssignees([...assignees, member.user_id]);
+                              } else {
+                                setAssignees(assignees.filter((id) => id !== member.user_id));
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`assignee-${member.user_id}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            <span className="font-medium">{member.profiles?.full_name}</span>
+                            <span className="text-muted-foreground ml-1 text-xs">({member.profiles?.student_id})</span>
+                          </label>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+                </div>
+              ) : (
+                <div className="border rounded-lg p-4 bg-muted/20">
+                  {task?.task_assignments && task.task_assignments.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {task.task_assignments.map((assignment) => (
+                        <Badge key={assignment.id} variant="secondary" className="gap-1.5 px-3 py-1.5">
+                          <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                            {assignment.profiles?.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                          </div>
+                          {assignment.profiles?.full_name}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">Chưa có người được giao</p>
+                  )}
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </ScrollArea>
 
         <DialogFooter className="pt-4 border-t gap-2">
           <Button variant="outline" onClick={onClose}>
-            {canEdit ? 'Hủy' : 'Đóng'}
+            {canEditDetails ? 'Hủy' : 'Đóng'}
           </Button>
-          {canEdit && (
+          {canEditDetails && (
             <Button onClick={handleSave} disabled={isLoading} className="min-w-24">
               {isLoading ? (
                 <>

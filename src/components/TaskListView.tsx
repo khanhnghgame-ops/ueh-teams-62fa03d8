@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -28,6 +29,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   Plus,
   MoreVertical,
   Calendar,
@@ -35,15 +42,20 @@ import {
   Trash2,
   Edit,
   Loader2,
-  Users,
   Layers,
   ChevronDown,
   ChevronRight,
+  Send,
+  AlertTriangle,
+  Clock,
+  CheckCircle2,
+  Eye,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Task, Stage, GroupMember } from '@/types/database';
+import TaskSubmissionDialog from './TaskSubmissionDialog';
 
 interface TaskListViewProps {
   stages: Stage[];
@@ -76,12 +88,19 @@ export default function TaskListView({
   const [isDeleting, setIsDeleting] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set(stages.map(s => s.id)));
   const [filterStage, setFilterStage] = useState<string>('all');
+  
+  // Submission dialog state
+  const [submissionTask, setSubmissionTask] = useState<Task | null>(null);
+  const [isSubmissionOpen, setIsSubmissionOpen] = useState(false);
 
   const getTasksByStage = (stageId: string | null) => {
     return tasks.filter((task) => task.stage_id === stageId);
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string, isOverdue: boolean) => {
+    if (isOverdue && status !== 'DONE' && status !== 'VERIFIED') {
+      return 'bg-destructive/10 text-destructive border-destructive/30';
+    }
     switch (status) {
       case 'TODO':
         return 'bg-muted text-muted-foreground';
@@ -96,7 +115,10 @@ export default function TaskListView({
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string, isOverdue: boolean) => {
+    if (isOverdue && status !== 'DONE' && status !== 'VERIFIED') {
+      return 'Trễ deadline';
+    }
     switch (status) {
       case 'TODO':
         return 'Chờ làm';
@@ -146,6 +168,10 @@ export default function TaskListView({
   const isOverdue = (deadline: string | null) => {
     if (!deadline) return false;
     return new Date(deadline) < new Date();
+  };
+
+  const isUserAssignee = (task: Task) => {
+    return task.task_assignments?.some(a => a.user_id === user?.id) || false;
   };
 
   const toggleStage = (stageId: string) => {
@@ -198,20 +224,44 @@ export default function TaskListView({
     }
   };
 
+  const openSubmissionDialog = (task: Task) => {
+    setSubmissionTask(task);
+    setIsSubmissionOpen(true);
+  };
+
   const TaskRow = ({ task, stageName }: { task: Task; stageName: string }) => {
     const progress = getProgressPercent(task.status);
-    const overdueStatus = isOverdue(task.deadline) && task.status !== 'DONE' && task.status !== 'VERIFIED';
+    const overdueStatus = isOverdue(task.deadline);
+    const taskIsOverdue = overdueStatus && task.status !== 'DONE' && task.status !== 'VERIFIED';
+    const isAssignee = isUserAssignee(task);
+    const canSubmit = isLeaderInGroup || (isAssignee && !taskIsOverdue);
 
     return (
-      <div className="group flex items-center gap-4 p-4 bg-card border rounded-xl hover:shadow-md transition-all">
-        {/* Task Title - Click to Edit */}
+      <div className={`group flex items-center gap-4 p-4 bg-card border rounded-xl transition-all ${
+        taskIsOverdue ? 'border-destructive/30 bg-destructive/5' : 'hover:shadow-md'
+      }`}>
+        {/* Task Title - Click to View/Edit */}
         <div 
           className="flex-1 min-w-0 cursor-pointer"
           onClick={() => onEditTask(task)}
         >
-          <h4 className="font-semibold text-sm truncate group-hover:text-primary transition-colors">
-            {task.title}
-          </h4>
+          <div className="flex items-center gap-2">
+            <h4 className="font-semibold text-sm truncate group-hover:text-primary transition-colors">
+              {task.title}
+            </h4>
+            {taskIsOverdue && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Task đã quá deadline</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           {task.description && (
             <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>
           )}
@@ -250,7 +300,7 @@ export default function TaskListView({
         {/* Deadline */}
         <div className="w-24 flex-shrink-0 hidden sm:block">
           {task.deadline ? (
-            <div className={`flex items-center gap-1 text-xs ${overdueStatus ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+            <div className={`flex items-center gap-1 text-xs ${taskIsOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
               <Calendar className="w-3 h-3" />
               <span>{formatDate(task.deadline)}</span>
             </div>
@@ -260,9 +310,9 @@ export default function TaskListView({
         </div>
 
         {/* Status */}
-        <div className="w-24 flex-shrink-0">
-          <Badge className={`${getStatusColor(task.status)} text-xs`}>
-            {getStatusLabel(task.status)}
+        <div className="w-28 flex-shrink-0">
+          <Badge className={`${getStatusColor(task.status, taskIsOverdue)} text-xs border`}>
+            {getStatusLabel(task.status, taskIsOverdue)}
           </Badge>
         </div>
 
@@ -274,21 +324,90 @@ export default function TaskListView({
           </div>
         </div>
 
-        {/* Submission Link Button */}
-        {task.submission_link && (
-          <a
-            href={task.submission_link}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="flex-shrink-0"
-          >
-            <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
-              <ExternalLink className="w-3 h-3" />
-              <span className="hidden sm:inline">Xem bài</span>
-            </Button>
-          </a>
-        )}
+        {/* Submission indicator + Action buttons */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Submission status */}
+          {task.submission_link ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="gap-1 text-success border-success/30 bg-success/10">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span className="hidden sm:inline text-xs">Đã nộp</span>
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Đã nộp bài - Click để xem chi tiết</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : isAssignee && !taskIsOverdue ? (
+            <Badge variant="outline" className="gap-1 text-muted-foreground border-muted-foreground/30">
+              <Clock className="w-3 h-3" />
+              <span className="hidden sm:inline text-xs">Chờ nộp</span>
+            </Badge>
+          ) : null}
+
+          {/* Submit Button */}
+          {(isAssignee || isLeaderInGroup) && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={canSubmit ? "default" : "outline"}
+                    size="sm"
+                    className={`gap-1.5 h-8 text-xs ${!canSubmit ? 'opacity-50' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openSubmissionDialog(task);
+                    }}
+                  >
+                    {task.submission_link ? (
+                      <>
+                        <Eye className="w-3 h-3" />
+                        <span className="hidden sm:inline">Xem</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3 h-3" />
+                        <span className="hidden sm:inline">Nộp bài</span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {taskIsOverdue && !isLeaderInGroup 
+                    ? 'Đã quá deadline - Chỉ Leader được nộp thay'
+                    : task.submission_link 
+                      ? 'Xem/Cập nhật bài nộp' 
+                      : 'Nộp bài'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {/* External Link */}
+          {task.submission_link && (
+            <a
+              href={(() => {
+                try {
+                  const links = JSON.parse(task.submission_link);
+                  return Array.isArray(links) && links[0]?.url ? links[0].url : task.submission_link;
+                } catch {
+                  return task.submission_link;
+                }
+              })()}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="flex-shrink-0"
+            >
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </a>
+          )}
+        </div>
 
         {/* Actions */}
         {isLeaderInGroup && (
@@ -303,6 +422,11 @@ export default function TaskListView({
                 <Edit className="w-4 h-4 mr-2" />
                 Chỉnh sửa
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openSubmissionDialog(task)}>
+                <Send className="w-4 h-4 mr-2" />
+                {task.submission_link ? 'Xem bài nộp' : 'Nộp thay'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setTaskToDelete(task)} className="text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" />
                 Xóa task
@@ -348,6 +472,7 @@ export default function TaskListView({
         {filteredStages.map((stage) => {
           const stageTasks = getTasksByStage(stage.id);
           const completedCount = stageTasks.filter(t => t.status === 'DONE' || t.status === 'VERIFIED').length;
+          const overdueCount = stageTasks.filter(t => isOverdue(t.deadline) && t.status !== 'DONE' && t.status !== 'VERIFIED').length;
           const isExpanded = expandedStages.has(stage.id);
 
           return (
@@ -362,7 +487,14 @@ export default function TaskListView({
                       {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </Button>
                     <div>
-                      <CardTitle className="text-base font-semibold">{stage.name}</CardTitle>
+                      <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        {stage.name}
+                        {overdueCount > 0 && (
+                          <Badge variant="destructive" className="text-[10px] px-1.5">
+                            {overdueCount} trễ
+                          </Badge>
+                        )}
+                      </CardTitle>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {stageTasks.length} task • {completedCount} hoàn thành
                       </p>
@@ -471,6 +603,19 @@ export default function TaskListView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Submission Dialog */}
+      <TaskSubmissionDialog
+        task={submissionTask}
+        isOpen={isSubmissionOpen}
+        onClose={() => {
+          setIsSubmissionOpen(false);
+          setSubmissionTask(null);
+        }}
+        onSave={onRefresh}
+        isAssignee={submissionTask ? isUserAssignee(submissionTask) : false}
+        isLeaderInGroup={isLeaderInGroup}
+      />
     </>
   );
 }
