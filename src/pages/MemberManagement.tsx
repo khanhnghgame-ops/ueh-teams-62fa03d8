@@ -40,7 +40,7 @@ import type { Profile } from '@/types/database';
 
 export default function MemberManagement() {
   const navigate = useNavigate();
-  const { user, isAdmin, isLeader, isLoading: authLoading, profile: currentProfile } = useAuth();
+  const { user, isAdmin, isLoading: authLoading, profile: currentProfile } = useAuth();
   const { toast } = useToast();
   
   const [members, setMembers] = useState<Profile[]>([]);
@@ -76,23 +76,16 @@ export default function MemberManagement() {
       .slice(0, 2);
   };
 
-  // Check if a member has leader/admin role in system
-  const isMemberLeader = (memberId: string): boolean => {
+  // Check if a member has admin role in system
+  const isMemberAdmin = (memberId: string): boolean => {
     const roles = memberRoles[memberId] || [];
-    return roles.includes('admin') || roles.includes('leader');
+    return roles.includes('admin');
   };
 
-  // Check if current user can manage the member
+  // Check if current user can manage the member (only admin can access this page)
   const canManageMember = (memberId: string): boolean => {
     if (memberId === user?.id) return false; // Cannot manage self
-    if (isAdmin) return true; // Admin can manage everyone except self
-    if (!isLeader) return false; // Non-leaders cannot manage anyone
-    
-    // Deputies (leaders who are not admins) cannot manage other leaders/admins
-    const targetRoles = memberRoles[memberId] || [];
-    const isTargetAdmin = targetRoles.includes('admin');
-    
-    return !isTargetAdmin;
+    return isAdmin; // Only admin can manage members
   };
 
   useEffect(() => {
@@ -127,31 +120,19 @@ export default function MemberManagement() {
     
     setMembers(profilesData || []);
     
-    // Fetch user roles
-    if (isAdmin) {
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-      
-      if (rolesData) {
-        const rolesMap: Record<string, string[]> = {};
-        rolesData.forEach((r) => {
-          if (!rolesMap[r.user_id]) {
-            rolesMap[r.user_id] = [];
-          }
-          rolesMap[r.user_id].push(r.role);
-        });
-        setMemberRoles(rolesMap);
-      }
-    } else if (isLeader) {
-      // Check admin status for each profile
+    // Fetch user roles (only admin can access this page)
+    const { data: rolesData } = await supabase
+      .from('user_roles')
+      .select('user_id, role');
+    
+    if (rolesData) {
       const rolesMap: Record<string, string[]> = {};
-      for (const profile of (profilesData || [])) {
-        const { data: hasAdminRole } = await supabase.rpc('is_admin', { _user_id: profile.id });
-        if (hasAdminRole) {
-          rolesMap[profile.id] = ['admin'];
+      rolesData.forEach((r) => {
+        if (!rolesMap[r.user_id]) {
+          rolesMap[r.user_id] = [];
         }
-      }
+        rolesMap[r.user_id].push(r.role);
+      });
       setMemberRoles(rolesMap);
     }
     
@@ -560,7 +541,7 @@ export default function MemberManagement() {
               <div className="space-y-3">
                 {filteredMembers.map((member) => {
                   const canManage = canManageMember(member.id);
-                  const isLeaderMember = isMemberLeader(member.id);
+                  const isAdminMember = isMemberAdmin(member.id);
                   
                   return (
                     <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
@@ -573,10 +554,10 @@ export default function MemberManagement() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-semibold truncate">{member.full_name}</p>
-                          {isLeaderMember && (
-                            <Badge className="bg-warning/10 text-warning text-xs gap-1">
+                          {isAdminMember && (
+                            <Badge className="bg-destructive/10 text-destructive text-xs gap-1">
                               <Shield className="w-3 h-3" />
-                              Leader
+                              Admin
                             </Badge>
                           )}
                           {member.id === user?.id && (
