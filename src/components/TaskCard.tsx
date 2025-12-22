@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { CountdownTimer } from '@/components/CountdownTimer';
-import { ExternalLink, FileText, Users, CheckCircle2 } from 'lucide-react';
+import { FileText, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import type { Task, TaskAssignment, Profile } from '@/types/database';
 
 interface TaskCardProps {
@@ -14,28 +14,37 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, groupId, showLink = true }: TaskCardProps) {
+  const isOverdue = task.deadline ? new Date(task.deadline) < new Date() : false;
+  const taskIsOverdue = isOverdue && task.status !== 'DONE' && task.status !== 'VERIFIED';
+
   const getStatusConfig = (status: string) => {
+    if (taskIsOverdue) {
+      return { label: 'Trễ deadline', color: 'bg-destructive/10 text-destructive border-destructive/30', progress: 0, icon: AlertTriangle };
+    }
     switch (status) {
       case 'TODO':
-        return { label: 'Chờ làm', color: 'bg-muted text-muted-foreground', progress: 0 };
+        return { label: 'Chờ làm', color: 'bg-muted text-muted-foreground', progress: 0, icon: Clock };
       case 'IN_PROGRESS':
-        return { label: 'Đang làm', color: 'bg-warning/10 text-warning border-warning/30', progress: 50 };
+        return { label: 'Đang làm', color: 'bg-warning/10 text-warning border-warning/30', progress: 50, icon: Clock };
       case 'DONE':
-        return { label: 'Hoàn thành', color: 'bg-primary/10 text-primary border-primary/30', progress: 80 };
+        return { label: 'Hoàn thành', color: 'bg-primary/10 text-primary border-primary/30', progress: 80, icon: CheckCircle2 };
       case 'VERIFIED':
-        return { label: 'Đã duyệt', color: 'bg-success/10 text-success border-success/30', progress: 100 };
+        return { label: 'Đã duyệt', color: 'bg-success/10 text-success border-success/30', progress: 100, icon: CheckCircle2 };
       default:
-        return { label: status, color: 'bg-muted', progress: 0 };
+        return { label: status, color: 'bg-muted', progress: 0, icon: Clock };
     }
   };
 
   const statusConfig = getStatusConfig(task.status);
+  const StatusIcon = statusConfig.icon;
 
   const getInitials = (name: string) =>
     name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
   const content = (
-    <Card className="group hover:shadow-card-lg transition-all duration-200 border-border/50 hover:border-primary/20">
+    <Card className={`group hover:shadow-card-lg transition-all duration-200 border-border/50 hover:border-primary/20 ${
+      taskIsOverdue ? 'border-destructive/30 bg-destructive/5' : ''
+    }`}>
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Header */}
@@ -46,6 +55,9 @@ export function TaskCard({ task, groupId, showLink = true }: TaskCardProps) {
                 <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                   {task.title}
                 </h3>
+                {taskIsOverdue && (
+                  <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                )}
               </div>
               {task.description && (
                 <p className="text-sm text-muted-foreground line-clamp-2">
@@ -53,7 +65,8 @@ export function TaskCard({ task, groupId, showLink = true }: TaskCardProps) {
                 </p>
               )}
             </div>
-            <Badge className={`${statusConfig.color} shrink-0 border`}>
+            <Badge className={`${statusConfig.color} shrink-0 border gap-1`}>
+              <StatusIcon className="w-3 h-3" />
               {statusConfig.label}
             </Badge>
           </div>
