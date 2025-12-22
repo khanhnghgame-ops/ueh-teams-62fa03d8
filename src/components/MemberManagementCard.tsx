@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -36,7 +38,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Users, MoreVertical, Trash2, Crown, Edit, Loader2, UserPlus, Mail, User, Hash } from 'lucide-react';
+import { 
+  Users, 
+  MoreVertical, 
+  Trash2, 
+  Crown, 
+  Loader2, 
+  UserPlus, 
+  Search,
+  Shield,
+  UserCheck,
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,28 +74,21 @@ export default function MemberManagementCard({
   onRefresh,
 }: MemberManagementCardProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [memberToDelete, setMemberToDelete] = useState<GroupMember | null>(null);
-  const [memberToEdit, setMemberToEdit] = useState<GroupMember | null>(null);
+  const [memberToChangeRole, setMemberToChangeRole] = useState<GroupMember | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isChangingRole, setIsChangingRole] = useState(false);
   
-  // Add member dialog - New member registration
+  // Add member dialog - Only select from system members
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
-  const [addMode, setAddMode] = useState<'existing' | 'new'>('existing');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedRole, setSelectedRole] = useState<'member' | 'leader'>('member');
-  
-  // New member fields
-  const [newMemberEmail, setNewMemberEmail] = useState('');
-  const [newMemberName, setNewMemberName] = useState('');
-  const [newMemberStudentId, setNewMemberStudentId] = useState('');
-  const [newMemberPassword, setNewMemberPassword] = useState('');
-  
-  // Edit member dialog
-  const [editName, setEditName] = useState('');
-  const [editRole, setEditRole] = useState<'member' | 'leader'>('member');
-  const [isEditing, setIsEditing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // New role for change role dialog
+  const [newRole, setNewRole] = useState<'member' | 'leader'>('member');
 
   const getInitials = (name: string) => {
     return name
@@ -97,11 +102,11 @@ export default function MemberManagementCard({
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'admin':
-        return <Badge className="bg-destructive/10 text-destructive text-xs">Admin</Badge>;
+        return <Badge className="bg-destructive/10 text-destructive text-xs gap-1"><Shield className="w-3 h-3" />Admin</Badge>;
       case 'leader':
-        return <Badge className="bg-warning/10 text-warning text-xs">Phó nhóm</Badge>;
+        return <Badge className="bg-warning/10 text-warning text-xs gap-1"><Crown className="w-3 h-3" />Phó nhóm</Badge>;
       default:
-        return <Badge variant="secondary" className="text-xs">Thành viên</Badge>;
+        return <Badge variant="secondary" className="text-xs gap-1"><UserCheck className="w-3 h-3" />Thành viên</Badge>;
     }
   };
 
@@ -113,7 +118,7 @@ export default function MemberManagementCard({
     return isLeaderInGroup;
   };
 
-  const canEditMember = (member: GroupMember) => {
+  const canChangeRole = (member: GroupMember) => {
     if (isGroupCreator(member.user_id)) return false;
     return isLeaderInGroup;
   };
@@ -121,16 +126,30 @@ export default function MemberManagementCard({
   const resetAddForm = () => {
     setSelectedUserId('');
     setSelectedRole('member');
-    setNewMemberEmail('');
-    setNewMemberName('');
-    setNewMemberStudentId('');
-    setNewMemberPassword('');
-    setAddMode('existing');
+    setSearchQuery('');
   };
 
-  const handleAddExistingMember = async () => {
+  // Filter available profiles that are not already in the group
+  const memberUserIds = members.map(m => m.user_id);
+  const filteredProfiles = availableProfiles.filter(p => {
+    // Exclude already added members
+    if (memberUserIds.includes(p.id)) return false;
+    
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        p.full_name.toLowerCase().includes(query) ||
+        p.student_id.toLowerCase().includes(query) ||
+        p.email.toLowerCase().includes(query)
+      );
+    }
+    return true;
+  });
+
+  const handleAddMember = async () => {
     if (!selectedUserId) {
-      toast({ title: 'Lỗi', description: 'Vui lòng chọn thành viên', variant: 'destructive' });
+      toast({ title: 'Lỗi', description: 'Vui lòng chọn thành viên từ danh sách', variant: 'destructive' });
       return;
     }
     setIsAddingMember(true);
@@ -147,17 +166,25 @@ export default function MemberManagementCard({
         throw error;
       }
 
+      // Get the selected profile name for logging
+      const selectedProfile = availableProfiles.find(p => p.id === selectedUserId);
+
       // Log activity
       await supabase.from('activity_logs').insert({
         user_id: user!.id,
-        user_name: user?.email || 'Unknown',
-        action: 'ADD_MEMBER',
+        user_name: profile?.full_name || user?.email || 'Unknown',
+        action: 'ADD_MEMBER_TO_PROJECT',
         action_type: 'member',
-        description: `Thêm thành viên mới vào project`,
+        description: `Thêm ${selectedProfile?.full_name || 'thành viên'} vào project với vai trò ${selectedRole === 'leader' ? 'Phó nhóm' : 'Thành viên'}`,
         group_id: groupId,
+        metadata: { 
+          added_user_id: selectedUserId, 
+          added_user_name: selectedProfile?.full_name,
+          role: selectedRole 
+        }
       });
 
-      toast({ title: 'Thành công', description: 'Đã thêm thành viên vào project' });
+      toast({ title: 'Thành công', description: `Đã thêm ${selectedProfile?.full_name || 'thành viên'} vào project` });
       setIsAddDialogOpen(false);
       resetAddForm();
       onRefresh();
@@ -168,102 +195,43 @@ export default function MemberManagementCard({
     }
   };
 
-  const handleAddNewMember = async () => {
-    // Validate inputs
-    if (!newMemberEmail.trim() || !newMemberName.trim() || !newMemberStudentId.trim() || !newMemberPassword.trim()) {
-      toast({ title: 'Lỗi', description: 'Vui lòng điền đầy đủ thông tin', variant: 'destructive' });
-      return;
-    }
-
-    if (newMemberPassword.length < 6) {
-      toast({ title: 'Lỗi', description: 'Mật khẩu phải có ít nhất 6 ký tự', variant: 'destructive' });
-      return;
-    }
-
-    setIsAddingMember(true);
+  const handleChangeRole = async () => {
+    if (!memberToChangeRole) return;
+    setIsChangingRole(true);
 
     try {
-      // Call edge function to create user
-      const { data, error } = await supabase.functions.invoke('manage-users', {
-        body: {
-          action: 'create',
-          email: newMemberEmail.trim(),
-          password: newMemberPassword,
-          full_name: newMemberName.trim(),
-          student_id: newMemberStudentId.trim(),
-        }
-      });
+      const { error } = await supabase
+        .from('group_members')
+        .update({ role: newRole })
+        .eq('id', memberToChangeRole.id);
 
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      const newUserId = data?.user?.id;
-      if (!newUserId) throw new Error('Không thể tạo tài khoản');
-
-      // Add to group
-      await supabase.from('group_members').insert({
-        group_id: groupId,
-        user_id: newUserId,
-        role: selectedRole,
-      });
 
       // Log activity
       await supabase.from('activity_logs').insert({
         user_id: user!.id,
-        user_name: user?.email || 'Unknown',
-        action: 'CREATE_AND_ADD_MEMBER',
+        user_name: profile?.full_name || user?.email || 'Unknown',
+        action: 'CHANGE_MEMBER_ROLE',
         action_type: 'member',
-        description: `Tạo tài khoản và thêm ${newMemberName.trim()} vào project`,
+        description: `Đổi vai trò của ${memberToChangeRole.profiles?.full_name} thành ${newRole === 'leader' ? 'Phó nhóm' : 'Thành viên'}`,
         group_id: groupId,
+        metadata: { 
+          member_id: memberToChangeRole.user_id,
+          old_role: memberToChangeRole.role,
+          new_role: newRole
+        }
       });
 
       toast({ 
         title: 'Thành công', 
-        description: `Đã tạo tài khoản cho ${newMemberName.trim()} và thêm vào project. Thành viên có thể đăng nhập với email và mật khẩu đã cung cấp.` 
+        description: `Đã đổi vai trò của ${memberToChangeRole.profiles?.full_name} thành ${newRole === 'leader' ? 'Phó nhóm' : 'Thành viên'}` 
       });
-      setIsAddDialogOpen(false);
-      resetAddForm();
+      setMemberToChangeRole(null);
       onRefresh();
     } catch (error: any) {
       toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
     } finally {
-      setIsAddingMember(false);
-    }
-  };
-
-  const handleEditMember = async () => {
-    if (!memberToEdit) return;
-    setIsEditing(true);
-
-    try {
-      const { error: roleError } = await supabase
-        .from('group_members')
-        .update({ role: editRole as 'admin' | 'leader' | 'member' })
-        .eq('id', memberToEdit.id);
-
-      if (roleError) throw roleError;
-
-      if (editName.trim() && editName !== memberToEdit.profiles?.full_name) {
-        await supabase.from('profiles').update({ full_name: editName.trim() }).eq('id', memberToEdit.user_id);
-      }
-
-      // Log activity
-      await supabase.from('activity_logs').insert({
-        user_id: user!.id,
-        user_name: user?.email || 'Unknown',
-        action: 'UPDATE_MEMBER',
-        action_type: 'member',
-        description: `Cập nhật thông tin thành viên ${memberToEdit.profiles?.full_name}`,
-        group_id: groupId,
-      });
-
-      toast({ title: 'Thành công', description: 'Đã cập nhật thông tin thành viên' });
-      setMemberToEdit(null);
-      onRefresh();
-    } catch (error: any) {
-      toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsEditing(false);
+      setIsChangingRole(false);
     }
   };
 
@@ -272,6 +240,7 @@ export default function MemberManagementCard({
     setIsDeleting(true);
 
     try {
+      // Remove from task assignments first
       const { data: tasksData } = await supabase.from('tasks').select('id').eq('group_id', groupId);
       if (tasksData && tasksData.length > 0) {
         await supabase.from('task_assignments').delete()
@@ -279,20 +248,22 @@ export default function MemberManagementCard({
           .in('task_id', tasksData.map(t => t.id));
       }
 
+      // Remove from group
       const { error } = await supabase.from('group_members').delete().eq('id', memberToDelete.id);
       if (error) throw error;
 
       // Log activity
       await supabase.from('activity_logs').insert({
         user_id: user!.id,
-        user_name: user?.email || 'Unknown',
-        action: 'REMOVE_MEMBER',
+        user_name: profile?.full_name || user?.email || 'Unknown',
+        action: 'REMOVE_MEMBER_FROM_PROJECT',
         action_type: 'member',
         description: `Xóa ${memberToDelete.profiles?.full_name} khỏi project`,
         group_id: groupId,
+        metadata: { removed_user_id: memberToDelete.user_id, removed_user_name: memberToDelete.profiles?.full_name }
       });
 
-      toast({ title: 'Đã xóa thành viên', description: `${memberToDelete.profiles?.full_name} đã bị xóa khỏi project` });
+      toast({ title: 'Đã xóa', description: `${memberToDelete.profiles?.full_name} đã bị xóa khỏi project` });
       setMemberToDelete(null);
       onRefresh();
     } catch (error: any) {
@@ -302,10 +273,9 @@ export default function MemberManagementCard({
     }
   };
 
-  const openEditDialog = (member: GroupMember) => {
-    setMemberToEdit(member);
-    setEditName(member.profiles?.full_name || '');
-    setEditRole(member.role === 'leader' ? 'leader' : 'member');
+  const openChangeRoleDialog = (member: GroupMember) => {
+    setMemberToChangeRole(member);
+    setNewRole(member.role === 'leader' ? 'member' : 'leader');
   };
 
   return (
@@ -315,12 +285,12 @@ export default function MemberManagementCard({
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
-              Thành viên ({members.length})
+              Thành viên Project ({members.length})
             </CardTitle>
             {isLeaderInGroup && (
               <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="gap-2">
                 <UserPlus className="w-4 h-4" />
-                Thêm thành viên
+                Thêm từ hệ thống
               </Button>
             )}
           </div>
@@ -351,7 +321,7 @@ export default function MemberManagementCard({
                 <div className="flex items-center gap-3">
                   {getRoleBadge(member.role)}
                   
-                  {(canEditMember(member) || canDeleteMember(member)) && (
+                  {(canChangeRole(member) || canDeleteMember(member)) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -359,17 +329,20 @@ export default function MemberManagementCard({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {canEditMember(member) && (
-                          <DropdownMenuItem onClick={() => openEditDialog(member)}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Chỉnh sửa
+                        {canChangeRole(member) && (
+                          <DropdownMenuItem onClick={() => openChangeRoleDialog(member)}>
+                            <Shield className="w-4 h-4 mr-2" />
+                            Đổi vai trò
                           </DropdownMenuItem>
                         )}
                         {canDeleteMember(member) && (
-                          <DropdownMenuItem onClick={() => setMemberToDelete(member)} className="text-destructive">
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Xóa khỏi project
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setMemberToDelete(member)} className="text-destructive">
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Xóa khỏi project
+                            </DropdownMenuItem>
+                          </>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -377,206 +350,222 @@ export default function MemberManagementCard({
                 </div>
               </div>
             ))}
+            
+            {members.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Chưa có thành viên nào</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Add Member Dialog - Enhanced */}
+      {/* Add Member Dialog - Simplified: Only from system members */}
       <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if (!open) resetAddForm(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">Thêm thành viên mới</DialogTitle>
+            <DialogTitle className="text-xl font-semibold flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-primary" />
+              Thêm thành viên vào Project
+            </DialogTitle>
             <DialogDescription>
-              Thêm thành viên có sẵn hoặc tạo tài khoản mới cho thành viên
+              Chọn thành viên từ danh sách thành viên hệ thống. Thành viên mới có thể được tạo tại trang "Thành viên hệ thống".
             </DialogDescription>
           </DialogHeader>
           
-          {/* Mode Selection */}
-          <div className="flex gap-2 p-1 bg-muted rounded-lg">
-            <Button 
-              variant={addMode === 'existing' ? 'default' : 'ghost'} 
-              size="sm" 
-              className="flex-1"
-              onClick={() => setAddMode('existing')}
-            >
-              Chọn từ danh sách
-            </Button>
-            <Button 
-              variant={addMode === 'new' ? 'default' : 'ghost'} 
-              size="sm" 
-              className="flex-1"
-              onClick={() => setAddMode('new')}
-            >
-              Tạo tài khoản mới
-            </Button>
-          </div>
-
           <div className="space-y-5 py-2">
-            {addMode === 'existing' ? (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Chọn thành viên <span className="text-destructive">*</span></Label>
-                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Tìm kiếm thành viên..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableProfiles.length === 0 ? (
-                        <div className="p-4 text-center text-muted-foreground text-sm">
-                          Không có thành viên khả dụng. Vui lòng tạo tài khoản mới.
-                        </div>
-                      ) : (
-                        availableProfiles.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{p.full_name}</span>
-                              <span className="text-xs text-muted-foreground">{p.student_id} - {p.email}</span>
-                            </div>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Họ và tên <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    value={newMemberName}
-                    onChange={(e) => setNewMemberName(e.target.value)}
-                    placeholder="Nguyễn Văn A"
-                    className="h-11"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <Hash className="w-4 h-4" />
-                    MSSV <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    value={newMemberStudentId}
-                    onChange={(e) => setNewMemberStudentId(e.target.value)}
-                    placeholder="31211234567"
-                    className="h-11"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <Mail className="w-4 h-4" />
-                    Email <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    type="email"
-                    value={newMemberEmail}
-                    onChange={(e) => setNewMemberEmail(e.target.value)}
-                    placeholder="email@example.com"
-                    className="h-11"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">
-                    Mật khẩu <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    type="password"
-                    value={newMemberPassword}
-                    onChange={(e) => setNewMemberPassword(e.target.value)}
-                    placeholder="Tối thiểu 6 ký tự"
-                    className="h-11"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Thành viên sẽ sử dụng email và mật khẩu này để đăng nhập
-                  </p>
-                </div>
-              </>
-            )}
-
+            {/* Search */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Vai trò trong project</Label>
+              <Label className="text-sm font-medium">Tìm kiếm thành viên</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Tìm theo tên, MSSV hoặc email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-11 pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Member List */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Chọn thành viên <span className="text-destructive">*</span></Label>
+              <ScrollArea className="h-64 border rounded-lg p-2">
+                {filteredProfiles.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    {searchQuery ? 'Không tìm thấy thành viên phù hợp' : 'Tất cả thành viên đã được thêm vào project'}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredProfiles.map((p) => (
+                      <div
+                        key={p.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                          selectedUserId === p.id 
+                            ? 'bg-primary/10 border-2 border-primary' 
+                            : 'bg-muted/30 hover:bg-muted/50 border-2 border-transparent'
+                        }`}
+                        onClick={() => setSelectedUserId(p.id)}
+                      >
+                        <Avatar className="w-10 h-10">
+                          <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                            {getInitials(p.full_name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{p.full_name}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {p.student_id} • {p.email}
+                          </p>
+                        </div>
+                        {selectedUserId === p.id && (
+                          <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                            <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+
+            {/* Role Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Vai trò trong Project <span className="text-destructive">*</span></Label>
               <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as 'member' | 'leader')}>
                 <SelectTrigger className="h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Thành viên</SelectItem>
-                  <SelectItem value="leader">Phó nhóm (có quyền quản lý)</SelectItem>
+                  <SelectItem value="member">
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="w-4 h-4" />
+                      Thành viên - Được giao task và nộp bài
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="leader">
+                    <div className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-warning" />
+                      Phó nhóm - Quản lý task, thành viên và giai đoạn
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Info box */}
+            <div className="p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+              <p>💡 Một tài khoản có thể có vai trò khác nhau ở các project khác nhau.</p>
+            </div>
           </div>
 
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => { setIsAddDialogOpen(false); resetAddForm(); }}>Hủy</Button>
-            <Button 
-              onClick={addMode === 'existing' ? handleAddExistingMember : handleAddNewMember} 
-              disabled={isAddingMember || (addMode === 'existing' && !selectedUserId)}
-              className="min-w-28"
-            >
-              {isAddingMember ? <Loader2 className="w-4 h-4 animate-spin" /> : addMode === 'existing' ? 'Thêm thành viên' : 'Tạo & Thêm'}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button onClick={handleAddMember} disabled={!selectedUserId || isAddingMember} className="min-w-28">
+              {isAddingMember ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Đang thêm...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Thêm vào Project
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Member Dialog */}
-      <Dialog open={!!memberToEdit} onOpenChange={() => setMemberToEdit(null)}>
+      {/* Change Role Dialog */}
+      <Dialog open={!!memberToChangeRole} onOpenChange={() => setMemberToChangeRole(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">Chỉnh sửa thành viên</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" />
+              Đổi vai trò thành viên
+            </DialogTitle>
+            <DialogDescription>
+              Thay đổi vai trò của <span className="font-medium">{memberToChangeRole?.profiles?.full_name}</span> trong project này.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5 py-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Họ và tên</Label>
-              <Input 
-                value={editName} 
-                onChange={(e) => setEditName(e.target.value)} 
-                placeholder="Nhập họ tên..."
-                className="h-11"
-              />
+          
+          <div className="space-y-4 py-2">
+            <div className="p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Avatar className="w-12 h-12">
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {memberToChangeRole?.profiles ? getInitials(memberToChangeRole.profiles.full_name) : '?'}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{memberToChangeRole?.profiles?.full_name}</p>
+                  <p className="text-sm text-muted-foreground">{memberToChangeRole?.profiles?.email}</p>
+                </div>
+              </div>
             </div>
+
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Vai trò</Label>
-              <Select value={editRole} onValueChange={(v) => setEditRole(v as 'member' | 'leader')}>
+              <Label className="text-sm font-medium">Vai trò mới</Label>
+              <Select value={newRole} onValueChange={(v) => setNewRole(v as 'member' | 'leader')}>
                 <SelectTrigger className="h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Thành viên</SelectItem>
-                  <SelectItem value="leader">Phó nhóm</SelectItem>
+                  <SelectItem value="member">
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="w-4 h-4" />
+                      Thành viên
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="leader">
+                    <div className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-warning" />
+                      Phó nhóm
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground">
-              <p><strong>MSSV:</strong> {memberToEdit?.profiles?.student_id}</p>
-              <p><strong>Email:</strong> {memberToEdit?.profiles?.email}</p>
-            </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setMemberToEdit(null)}>Hủy</Button>
-            <Button onClick={handleEditMember} disabled={isEditing} className="min-w-24">
-              {isEditing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Lưu thay đổi'}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMemberToChangeRole(null)}>
+              Hủy
+            </Button>
+            <Button onClick={handleChangeRole} disabled={isChangingRole} className="min-w-28">
+              {isChangingRole ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Đang lưu...
+                </>
+              ) : (
+                'Xác nhận'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Delete Member Confirmation */}
       <AlertDialog open={!!memberToDelete} onOpenChange={() => setMemberToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Xác nhận xóa thành viên</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc chắn muốn xóa <strong>{memberToDelete?.profiles?.full_name}</strong> khỏi project?
+              Bạn có chắc chắn muốn xóa <span className="font-semibold">{memberToDelete?.profiles?.full_name}</span> khỏi project này?
               <br /><br />
-              <span className="text-warning">Các task đã giao cho thành viên này sẽ trở thành "Chưa phân công".</span>
+              <span className="text-muted-foreground">
+                Lưu ý: Thao tác này chỉ xóa thành viên khỏi project, không xóa tài khoản khỏi hệ thống.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -586,7 +575,7 @@ export default function MemberManagementCard({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}
             >
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Xóa thành viên'}
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Xóa khỏi project'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
