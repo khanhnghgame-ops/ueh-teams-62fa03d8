@@ -197,12 +197,12 @@ export default function NotesPage({ groupId, stages, tasks, members }: NotesPage
               </SelectContent>
             </Select>
 
-            <Select value={filterMember} onValueChange={setFilterMember}>
+            <Select value={filterMember || '_all'} onValueChange={(v) => setFilterMember(v === '_all' ? '' : v)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Thành viên" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tất cả thành viên</SelectItem>
+                <SelectItem value="_all">Tất cả thành viên</SelectItem>
                 {members.map(m => (
                   <SelectItem key={m.user_id} value={m.user_id}>
                     {m.profiles?.full_name || 'Unknown'}
@@ -211,12 +211,12 @@ export default function NotesPage({ groupId, stages, tasks, members }: NotesPage
               </SelectContent>
             </Select>
 
-            <Select value={filterStage} onValueChange={setFilterStage}>
+            <Select value={filterStage || '_all'} onValueChange={(v) => setFilterStage(v === '_all' ? '' : v)}>
               <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder="Giai đoạn" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tất cả</SelectItem>
+                <SelectItem value="_all">Tất cả</SelectItem>
                 {stages.map(s => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                 ))}
