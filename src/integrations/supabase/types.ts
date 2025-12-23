@@ -188,12 +188,58 @@ export type Database = {
           },
         ]
       }
+      note_history: {
+        Row: {
+          change_summary: string | null
+          content: string | null
+          id: string
+          note_id: string
+          saved_at: string
+          tags: string[] | null
+          title: string
+          user_id: string
+          visibility: string
+        }
+        Insert: {
+          change_summary?: string | null
+          content?: string | null
+          id?: string
+          note_id: string
+          saved_at?: string
+          tags?: string[] | null
+          title: string
+          user_id: string
+          visibility: string
+        }
+        Update: {
+          change_summary?: string | null
+          content?: string | null
+          id?: string
+          note_id?: string
+          saved_at?: string
+          tags?: string[] | null
+          title?: string
+          user_id?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_history_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
+          auto_save_content: string | null
           content: string | null
           created_at: string
           group_id: string
           id: string
+          last_auto_save: string | null
           links: string[] | null
           stage_id: string | null
           tags: string[] | null
@@ -204,10 +250,12 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          auto_save_content?: string | null
           content?: string | null
           created_at?: string
           group_id: string
           id?: string
+          last_auto_save?: string | null
           links?: string[] | null
           stage_id?: string | null
           tags?: string[] | null
@@ -218,10 +266,12 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          auto_save_content?: string | null
           content?: string | null
           created_at?: string
           group_id?: string
           id?: string
+          last_auto_save?: string | null
           links?: string[] | null
           stage_id?: string | null
           tags?: string[] | null
