@@ -9,8 +9,6 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Groups from "./pages/Groups";
 import GroupDetail from "./pages/GroupDetail";
-import ProjectNotes from "./pages/ProjectNotesPage";
-import NoteFullPage from "./pages/NoteFullPage";
 import MemberManagement from "./pages/MemberManagement";
 import NotFound from "./pages/NotFound";
 import AdminActivity from "./pages/AdminActivity";
@@ -34,8 +32,6 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />
       <Route path="/groups/:groupId" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
-      <Route path="/groups/:groupId/notes" element={<ProtectedRoute><ProjectNotes /></ProtectedRoute>} />
-      <Route path="/groups/:groupId/notes/:noteId" element={<ProtectedRoute><NoteFullPage /></ProtectedRoute>} />
       <Route path="/members" element={<ProtectedRoute><MemberManagement /></ProtectedRoute>} />
       <Route path="/admin/activity" element={<ProtectedRoute><AdminActivity /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
