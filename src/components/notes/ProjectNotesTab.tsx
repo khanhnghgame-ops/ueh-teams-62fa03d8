@@ -10,15 +10,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import {
   Plus, Save, Lock, Globe, Star, Tag, X, Loader2, History, Clock, Check,
-  ChevronDown, StickyNote, Edit3, Eye, ArrowLeft, Layers, FileText, User,
-  Search, BookOpen, Trash2
+  ChevronDown, StickyNote, Edit3, Eye, Layers, User,
+  Search, BookOpen, Trash2, FileText, MoreHorizontal
 } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import type { Note, NoteVisibility } from '@/types/notes';
-import type { Stage, GroupMember, Profile } from '@/types/database';
+import type { Stage, GroupMember } from '@/types/database';
 
 interface NoteHistory {
   id: string;
@@ -50,7 +51,7 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
 
   // Current note state
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isFullEditMode, setIsFullEditMode] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
   // Note editing state
@@ -68,7 +69,7 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchNotes();
@@ -142,7 +143,7 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
     pinned: notes.filter(n => n.visibility === 'pinned').length,
   }), [notes, user?.id]);
 
-  const openNote = async (note: Note) => {
+  const viewNote = async (note: Note) => {
     // Check if user can view this note
     if (note.visibility === 'private' && note.user_id !== user?.id) {
       toast({ title: 'Không có quyền', description: 'Ghi chú này là riêng tư', variant: 'destructive' });
@@ -156,7 +157,7 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
     setTags(note.tags || []);
     setStageId(note.stage_id || '');
     setLastSaved(new Date(note.updated_at));
-    setIsEditing(false);
+    setIsFullEditMode(false);
     setIsCreating(false);
     setHasUnsavedChanges(false);
 
@@ -178,21 +179,27 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
     setTags([]);
     setStageId('');
     setHistory([]);
-    setIsEditing(true);
+    setIsFullEditMode(true);
     setIsCreating(true);
     setHasUnsavedChanges(false);
     setLastSaved(null);
   };
 
-  const closeNote = () => {
+  const openEditMode = () => {
+    setIsFullEditMode(true);
+  };
+
+  const closeEditMode = () => {
     if (hasUnsavedChanges) {
       if (!window.confirm('Bạn có thay đổi chưa lưu. Bạn có chắc muốn đóng?')) {
         return;
       }
     }
-    setSelectedNote(null);
-    setIsEditing(false);
-    setIsCreating(false);
+    if (isCreating) {
+      setSelectedNote(null);
+      setIsCreating(false);
+    }
+    setIsFullEditMode(false);
     setHasUnsavedChanges(false);
   };
 
@@ -272,7 +279,7 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
           };
           setSelectedNote(enrichedNote);
           setIsCreating(false);
-          setIsEditing(false);
+          setIsFullEditMode(false);
         }
       } else if (selectedNote) {
         // Save history before updating
@@ -311,20 +318,21 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedNote || !window.confirm('Bạn có chắc muốn xóa ghi chú này?')) return;
-
-    setIsDeleting(true);
+  const handleDeleteNote = async (noteId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setDeletingNoteId(noteId);
     try {
-      await supabase.from('note_history').delete().eq('note_id', selectedNote.id);
-      await supabase.from('notes').delete().eq('id', selectedNote.id);
+      await supabase.from('note_history').delete().eq('note_id', noteId);
+      await supabase.from('notes').delete().eq('id', noteId);
       toast({ title: 'Thành công', description: 'Đã xóa ghi chú' });
-      closeNote();
+      if (selectedNote?.id === noteId) {
+        setSelectedNote(null);
+      }
       await fetchNotes();
     } catch (error: any) {
       toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
     } finally {
-      setIsDeleting(false);
+      setDeletingNoteId(null);
     }
   };
 
@@ -335,7 +343,7 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
     setTags(historyItem.tags || []);
     setHasUnsavedChanges(true);
     setIsHistoryOpen(false);
-    setIsEditing(true);
+    setIsFullEditMode(true);
     toast({ title: 'Đã khôi phục', description: 'Nhấn Lưu để áp dụng thay đổi' });
   };
 
@@ -359,10 +367,10 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
   };
 
   // Strip HTML tags for preview
-  const getTextPreview = (html: string | null) => {
+  const getTextPreview = (html: string | null, maxLength = 100) => {
     if (!html) return '';
     const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-    return text.length > 80 ? text.slice(0, 80) + '...' : text;
+    return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
   };
 
   if (isLoadingNotes) {
@@ -373,68 +381,59 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
     );
   }
 
-  // Note detail view (view or edit mode)
-  if (selectedNote || isCreating) {
+  // Full-screen edit mode (like Word)
+  if (isFullEditMode) {
     return (
-      <div className="flex flex-col -mx-4 -mt-2 sm:-mx-6 lg:-mx-8">
-        {/* Toolbar - Green bar */}
-        <div className="bg-primary px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
-          {/* Back button */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={closeNote}
-            className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-0"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Danh sách</span>
-          </Button>
+      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        {/* Word-like Toolbar */}
+        <div className="border-b bg-muted/30 flex flex-col">
+          {/* Top row - Actions */}
+          <div className="flex items-center gap-2 px-4 py-2 border-b">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={closeEditMode}
+              className="gap-2"
+            >
+              <X className="w-4 h-4" />
+              Đóng
+            </Button>
 
-          <div className="w-px h-6 bg-primary-foreground/20" />
+            <div className="w-px h-6 bg-border" />
 
-          {/* Visibility Toggle */}
-          {isEditing && isOwner && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="sm" className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-0">
-                  {visibility === 'private' && <Lock className="w-4 h-4" />}
-                  {visibility === 'public' && <Globe className="w-4 h-4" />}
-                  {visibility === 'pinned' && <Star className="w-4 h-4 fill-current" />}
-                  <span className="hidden sm:inline">
-                    {visibility === 'private' && 'Riêng tư'}
-                    {visibility === 'public' && 'Công khai'}
-                    {visibility === 'pinned' && 'Ghim'}
-                  </span>
-                  <ChevronDown className="w-3 h-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => { setVisibility('private'); setHasUnsavedChanges(true); }}>
-                  <Lock className="w-4 h-4 mr-2" />Riêng tư
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setVisibility('public'); setHasUnsavedChanges(true); }}>
-                  <Globe className="w-4 h-4 mr-2 text-blue-500" />Công khai
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setVisibility('pinned'); setHasUnsavedChanges(true); }}>
-                  <Star className="w-4 h-4 mr-2 text-yellow-500" />Ghim
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+            {/* Visibility Toggle */}
+            {isOwner && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    {visibility === 'private' && <Lock className="w-4 h-4" />}
+                    {visibility === 'public' && <Globe className="w-4 h-4 text-blue-500" />}
+                    {visibility === 'pinned' && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
+                    <span>
+                      {visibility === 'private' && 'Riêng tư'}
+                      {visibility === 'public' && 'Công khai'}
+                      {visibility === 'pinned' && 'Ghim'}
+                    </span>
+                    <ChevronDown className="w-3 h-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => { setVisibility('private'); setHasUnsavedChanges(true); }}>
+                    <Lock className="w-4 h-4 mr-2" />Riêng tư
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setVisibility('public'); setHasUnsavedChanges(true); }}>
+                    <Globe className="w-4 h-4 mr-2 text-blue-500" />Công khai
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setVisibility('pinned'); setHasUnsavedChanges(true); }}>
+                    <Star className="w-4 h-4 mr-2 text-yellow-500" />Ghim
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
-          {!isEditing && selectedNote && (
-            <Badge variant="secondary" className="gap-1 bg-primary-foreground/10 text-primary-foreground border-0">
-              {getVisibilityIcon(visibility)}
-              {visibility === 'private' && 'Riêng tư'}
-              {visibility === 'public' && 'Công khai'}
-              {visibility === 'pinned' && 'Ghim'}
-            </Badge>
-          )}
-
-          {/* Stage selector (edit mode) */}
-          {isEditing && (
+            {/* Stage selector */}
             <Select value={stageId || '_none'} onValueChange={(v) => { setStageId(v === '_none' ? '' : v); setHasUnsavedChanges(true); }}>
-              <SelectTrigger className="w-auto h-8 bg-primary-foreground/10 text-primary-foreground border-0 text-sm">
+              <SelectTrigger className="w-auto h-8 text-sm">
                 <Layers className="w-3 h-3 mr-1" />
                 <SelectValue placeholder="Giai đoạn" />
               </SelectTrigger>
@@ -445,208 +444,138 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
                 ))}
               </SelectContent>
             </Select>
-          )}
 
-          {/* Spacer */}
-          <div className="flex-1" />
+            <div className="flex-1" />
 
-          {/* Status */}
-          <div className="flex items-center gap-2 text-sm text-primary-foreground/80">
-            {isAutoSaving && (
-              <span className="flex items-center gap-1">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span className="hidden sm:inline">Đang lưu...</span>
-              </span>
-            )}
-            {!isAutoSaving && hasUnsavedChanges && (
-              <span className="flex items-center gap-1 text-yellow-300">
-                <Clock className="w-3 h-3" />
-                <span className="hidden sm:inline">Chưa lưu</span>
-              </span>
-            )}
-            {!isAutoSaving && !hasUnsavedChanges && lastSaved && !isCreating && (
-              <span className="flex items-center gap-1 text-green-300">
-                <Check className="w-3 h-3" />
-                <span className="hidden sm:inline">Đã lưu</span>
-              </span>
-            )}
-          </div>
+            {/* Status */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {isAutoSaving && (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Đang lưu...
+                </span>
+              )}
+              {!isAutoSaving && hasUnsavedChanges && (
+                <span className="flex items-center gap-1 text-yellow-600">
+                  <Clock className="w-3 h-3" />
+                  Chưa lưu
+                </span>
+              )}
+              {!isAutoSaving && !hasUnsavedChanges && lastSaved && !isCreating && (
+                <span className="flex items-center gap-1 text-green-600">
+                  <Check className="w-3 h-3" />
+                  Đã lưu
+                </span>
+              )}
+            </div>
 
-          {/* History button */}
-          {!isCreating && selectedNote && (
-            <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-              <DialogTrigger asChild>
-                <Button variant="secondary" size="sm" className="bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-0">
-                  <History className="w-4 h-4" />
-                  <span className="hidden sm:inline ml-2">Lịch sử</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Lịch sử chỉnh sửa</DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="max-h-[400px]">
-                  {history.length > 0 ? (
-                    <div className="space-y-2">
-                      {history.map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-                          onClick={() => handleRestoreVersion(item)}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-sm truncate">{item.title}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {format(new Date(item.saved_at), 'dd/MM HH:mm', { locale: vi })}
-                            </span>
+            {/* History button */}
+            {!isCreating && selectedNote && (
+              <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    <History className="w-4 h-4" />
+                    Lịch sử
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Lịch sử chỉnh sửa</DialogTitle>
+                  </DialogHeader>
+                  <ScrollArea className="max-h-[400px]">
+                    {history.length > 0 ? (
+                      <div className="space-y-2">
+                        {history.map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                            onClick={() => handleRestoreVersion(item)}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-sm truncate">{item.title}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(item.saved_at), 'dd/MM HH:mm', { locale: vi })}
+                              </span>
+                            </div>
+                            {item.change_summary && (
+                              <p className="text-xs text-muted-foreground">{item.change_summary}</p>
+                            )}
                           </div>
-                          {item.change_summary && (
-                            <p className="text-xs text-muted-foreground">{item.change_summary}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-center text-muted-foreground py-8">Chưa có lịch sử</p>
-                  )}
-                </ScrollArea>
-              </DialogContent>
-            </Dialog>
-          )}
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-muted-foreground py-8">Chưa có lịch sử</p>
+                    )}
+                  </ScrollArea>
+                </DialogContent>
+              </Dialog>
+            )}
 
-          {/* Edit/View toggle */}
-          {!isCreating && selectedNote && isOwner && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setIsEditing(!isEditing)}
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-0"
-            >
-              {isEditing ? <Eye className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
-              <span className="hidden sm:inline">{isEditing ? 'Xem' : 'Sửa'}</span>
-            </Button>
-          )}
-
-          {/* Delete button */}
-          {!isCreating && selectedNote && isOwner && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-destructive/20 hover:bg-destructive/30 text-primary-foreground border-0"
-            >
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            </Button>
-          )}
-
-          {/* Save button */}
-          {isEditing && isOwner && (
+            {/* Save button */}
             <Button
               size="sm"
               onClick={handleSave}
               disabled={isSaving || !title.trim()}
-              className="gap-2 bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+              className="gap-2"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span className="hidden sm:inline">Lưu</span>
+              Lưu
             </Button>
-          )}
+          </div>
         </div>
 
-        {/* Note content area - 100% white space */}
-        <div className="flex-1 bg-background p-4 sm:p-6 lg:p-8">
-          <div className="max-w-4xl mx-auto space-y-6">
+        {/* Editor content - 100% for writing */}
+        <div className="flex-1 overflow-auto bg-background">
+          <div className="max-w-4xl mx-auto py-8 px-6">
             {/* Title */}
-            {isEditing ? (
-              <Input
-                value={title}
-                onChange={e => { setTitle(e.target.value); setHasUnsavedChanges(true); }}
-                placeholder="Tiêu đề ghi chú..."
-                className="text-2xl font-bold h-14 border-none shadow-none focus-visible:ring-0 px-0 placeholder:text-muted-foreground/50"
-              />
-            ) : (
-              <h1 className="text-2xl font-bold">{title}</h1>
-            )}
-
-            {/* Metadata */}
-            {!isCreating && selectedNote && (
-              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                {selectedNote.profiles && (
-                  <span className="flex items-center gap-1">
-                    <User className="w-4 h-4" />
-                    {selectedNote.profiles.full_name}
-                  </span>
-                )}
-                <span className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {format(new Date(selectedNote.created_at), 'dd/MM/yyyy HH:mm', { locale: vi })}
-                </span>
-                {stageId && stages.find(s => s.id === stageId) && (
-                  <Badge variant="outline" className="gap-1">
-                    <Layers className="w-3 h-3" />
-                    {stages.find(s => s.id === stageId)?.name}
-                  </Badge>
-                )}
-              </div>
-            )}
+            <Input
+              value={title}
+              onChange={e => { setTitle(e.target.value); setHasUnsavedChanges(true); }}
+              placeholder="Tiêu đề ghi chú..."
+              className="text-3xl font-bold h-16 border-none shadow-none focus-visible:ring-0 px-0 placeholder:text-muted-foreground/40 mb-4"
+            />
 
             {/* Tags */}
-            {(isEditing || tags.length > 0) && (
-              <div className="flex flex-wrap items-center gap-2">
-                {tags.map((tag, index) => (
-                  <Badge key={index} variant="secondary" className="gap-1">
-                    <Tag className="w-3 h-3" />
-                    {tag}
-                    {isEditing && (
-                      <button 
-                        onClick={() => { setTags(tags.filter((_, i) => i !== index)); setHasUnsavedChanges(true); }} 
-                        className="ml-1 hover:text-destructive"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </Badge>
-                ))}
-                {isEditing && (
-                  <div className="flex gap-1">
-                    <Input
-                      value={newTag}
-                      onChange={e => setNewTag(e.target.value)}
-                      placeholder="Thêm tag..."
-                      className="h-7 w-24 text-xs"
-                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                    />
-                    <Button size="sm" variant="ghost" onClick={addTag} className="h-7 px-2">
-                      <Plus className="w-3 h-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Content */}
-            {isEditing ? (
-              <div className="min-h-[500px]">
-                <NoteEditor
-                  content={content}
-                  onChange={handleContentChange}
-                  placeholder="Bắt đầu viết ghi chú của bạn..."
+            <div className="flex flex-wrap items-center gap-2 mb-6">
+              {tags.map((tag, index) => (
+                <Badge key={index} variant="secondary" className="gap-1">
+                  <Tag className="w-3 h-3" />
+                  {tag}
+                  <button 
+                    onClick={() => { setTags(tags.filter((_, i) => i !== index)); setHasUnsavedChanges(true); }} 
+                    className="ml-1 hover:text-destructive"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+              <div className="flex gap-1">
+                <Input
+                  value={newTag}
+                  onChange={e => setNewTag(e.target.value)}
+                  placeholder="Thêm tag..."
+                  className="h-7 w-28 text-xs"
+                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
                 />
+                <Button size="sm" variant="ghost" onClick={addTag} className="h-7 px-2">
+                  <Plus className="w-3 h-3" />
+                </Button>
               </div>
-            ) : (
-              <div 
-                className="prose prose-sm max-w-none min-h-[300px]"
-                dangerouslySetInnerHTML={{ __html: content || '<p class="text-muted-foreground">Chưa có nội dung</p>' }}
-              />
-            )}
+            </div>
+
+            {/* Editor */}
+            <NoteEditor
+              content={content}
+              onChange={handleContentChange}
+              placeholder="Bắt đầu viết ghi chú của bạn..."
+            />
           </div>
         </div>
       </div>
     );
   }
 
-  // Notes list view
+  // Main view with list and preview
   return (
     <div className="space-y-6">
       {/* Header with stats */}
@@ -723,75 +652,210 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
         </div>
       </div>
 
-      {/* Notes Grid */}
-      {filteredNotes.length > 0 ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredNotes.map(note => (
-            <div
-              key={note.id}
-              onClick={() => openNote(note)}
-              className="group cursor-pointer p-4 border rounded-xl bg-card hover:shadow-md hover:border-primary/50 transition-all"
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <h3 className="font-semibold text-sm line-clamp-1 group-hover:text-primary transition-colors flex-1">
-                  {note.title}
-                </h3>
-                {getVisibilityIcon(note.visibility)}
+      {/* Main content - Split view */}
+      <div className="flex gap-6">
+        {/* Notes list - horizontal layout */}
+        <div className={`${selectedNote ? 'w-1/3' : 'w-full'} space-y-2 transition-all`}>
+          {filteredNotes.length > 0 ? (
+            filteredNotes.map(note => (
+              <div
+                key={note.id}
+                onClick={() => viewNote(note)}
+                className={`group flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all hover:shadow-sm ${
+                  selectedNote?.id === note.id ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
+                }`}
+              >
+                {/* Icon */}
+                <div className="flex-shrink-0">
+                  <FileText className="w-5 h-5 text-muted-foreground" />
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-sm truncate">{note.title}</h3>
+                    {getVisibilityIcon(note.visibility)}
+                  </div>
+                  {note.content && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {getTextPreview(note.content, 60)}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                    {note.user_id !== user?.id && note.profiles && (
+                      <span>{note.profiles.full_name.split(' ').slice(-2).join(' ')}</span>
+                    )}
+                    <span>{format(new Date(note.updated_at), 'dd/MM/yyyy', { locale: vi })}</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {note.user_id === user?.id && (
+                  <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          {deletingNoteId === note.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Xóa ghi chú?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Hành động này không thể hoàn tác. Ghi chú "{note.title}" sẽ bị xóa vĩnh viễn.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Hủy</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteNote(note.id)}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            Xóa
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                <StickyNote className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Chưa có ghi chú nào</h3>
+              <p className="text-muted-foreground mb-4">Tạo ghi chú để lưu lại kiến thức và ý tưởng</p>
+              <Button onClick={createNewNote}>
+                <Plus className="w-4 h-4 mr-2" />
+                Tạo ghi chú đầu tiên
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Note preview/view */}
+        {selectedNote && (
+          <div className="flex-1 border rounded-lg bg-card overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 p-4 border-b bg-muted/30">
+              <div className="flex items-center gap-2">
+                {getVisibilityIcon(selectedNote.visibility)}
+                <span className="text-sm text-muted-foreground">
+                  {visibility === 'private' && 'Riêng tư'}
+                  {visibility === 'public' && 'Công khai'}
+                  {visibility === 'pinned' && 'Ghim'}
+                </span>
+                {stageId && stages.find(s => s.id === stageId) && (
+                  <Badge variant="outline" className="gap-1 text-xs">
+                    <Layers className="w-3 h-3" />
+                    {stages.find(s => s.id === stageId)?.name}
+                  </Badge>
+                )}
               </div>
 
-              {/* Preview */}
-              {note.content && (
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
-                  {getTextPreview(note.content)}
-                </p>
-              )}
-
-              {/* Tags */}
-              {note.tags && note.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {note.tags.slice(0, 2).map((tag, index) => (
-                    <Badge key={index} variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                      {tag}
-                    </Badge>
-                  ))}
-                  {note.tags.length > 2 && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                      +{note.tags.length - 2}
-                    </Badge>
-                  )}
-                </div>
-              )}
-
-              {/* Footer */}
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-2 border-t mt-auto">
-                {note.user_id !== user?.id && note.profiles && (
-                  <span className="flex items-center gap-1">
-                    <User className="w-2.5 h-2.5" />
-                    {note.profiles.full_name.split(' ').slice(-2).join(' ')}
-                  </span>
+              <div className="flex items-center gap-2">
+                {isOwner && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={openEditMode}
+                      className="gap-2"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      Chỉnh sửa
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Xóa ghi chú?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Hành động này không thể hoàn tác. Ghi chú này sẽ bị xóa vĩnh viễn.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Hủy</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteNote(selectedNote.id)}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            Xóa
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
                 )}
-                <span className="flex items-center gap-1">
-                  <Clock className="w-2.5 h-2.5" />
-                  {format(new Date(note.updated_at), 'dd/MM', { locale: vi })}
-                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedNote(null)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-16">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-            <StickyNote className="w-8 h-8 text-muted-foreground" />
+
+            {/* Content */}
+            <ScrollArea className="h-[500px]">
+              <div className="p-6">
+                <h1 className="text-2xl font-bold mb-4">{title}</h1>
+
+                {/* Metadata */}
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4">
+                  {selectedNote.profiles && (
+                    <span className="flex items-center gap-1">
+                      <User className="w-4 h-4" />
+                      {selectedNote.profiles.full_name}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    {format(new Date(selectedNote.created_at), 'dd/MM/yyyy HH:mm', { locale: vi })}
+                  </span>
+                </div>
+
+                {/* Tags */}
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary" className="gap-1">
+                        <Tag className="w-3 h-3" />
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {/* Content */}
+                <div 
+                  className="prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: content || '<p class="text-muted-foreground">Chưa có nội dung</p>' }}
+                />
+              </div>
+            </ScrollArea>
           </div>
-          <h3 className="text-lg font-semibold mb-2">Chưa có ghi chú nào</h3>
-          <p className="text-muted-foreground mb-4">Tạo ghi chú để lưu lại kiến thức và ý tưởng</p>
-          <Button onClick={createNewNote}>
-            <Plus className="w-4 h-4 mr-2" />
-            Tạo ghi chú đầu tiên
-          </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
