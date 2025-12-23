@@ -13,6 +13,8 @@ export interface Note {
   task_id: string | null;
   stage_id: string | null;
   links: string[];
+  auto_save_content: string | null;
+  last_auto_save: string | null;
   created_at: string;
   updated_at: string;
   profiles?: Profile;
