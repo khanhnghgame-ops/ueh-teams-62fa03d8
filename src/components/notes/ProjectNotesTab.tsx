@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
 import {
   Plus, Save, Lock, Globe, Star, Tag, X, Loader2, History, Clock, Check,
   ChevronDown, StickyNote, Edit3, Eye, Layers, User,
@@ -385,191 +387,203 @@ export default function ProjectNotesTab({ groupId, stages, members }: ProjectNot
   if (isFullEditMode) {
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col">
-        {/* Word-like Toolbar */}
-        <div className="border-b bg-muted/30 flex flex-col">
-          {/* Top row - Actions */}
-          <div className="flex items-center gap-2 px-4 py-2 border-b">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={closeEditMode}
-              className="gap-2"
-            >
-              <X className="w-4 h-4" />
-              Đóng
-            </Button>
+        {/* Top bar - File actions */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/50">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={closeEditMode}
+            className="gap-2"
+          >
+            <X className="w-4 h-4" />
+            <span className="hidden sm:inline">Đóng</span>
+          </Button>
 
-            <div className="w-px h-6 bg-border" />
+          <Separator orientation="vertical" className="h-6" />
 
-            {/* Visibility Toggle */}
-            {isOwner && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    {visibility === 'private' && <Lock className="w-4 h-4" />}
-                    {visibility === 'public' && <Globe className="w-4 h-4 text-blue-500" />}
-                    {visibility === 'pinned' && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
-                    <span>
-                      {visibility === 'private' && 'Riêng tư'}
-                      {visibility === 'public' && 'Công khai'}
-                      {visibility === 'pinned' && 'Ghim'}
-                    </span>
-                    <ChevronDown className="w-3 h-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => { setVisibility('private'); setHasUnsavedChanges(true); }}>
-                    <Lock className="w-4 h-4 mr-2" />Riêng tư
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setVisibility('public'); setHasUnsavedChanges(true); }}>
-                    <Globe className="w-4 h-4 mr-2 text-blue-500" />Công khai
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setVisibility('pinned'); setHasUnsavedChanges(true); }}>
-                    <Star className="w-4 h-4 mr-2 text-yellow-500" />Ghim
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+          {/* Visibility Toggle */}
+          {isOwner && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2">
+                  {visibility === 'private' && <Lock className="w-4 h-4" />}
+                  {visibility === 'public' && <Globe className="w-4 h-4 text-blue-500" />}
+                  {visibility === 'pinned' && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
+                  <span className="hidden sm:inline">
+                    {visibility === 'private' && 'Riêng tư'}
+                    {visibility === 'public' && 'Công khai'}
+                    {visibility === 'pinned' && 'Ghim'}
+                  </span>
+                  <ChevronDown className="w-3 h-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => { setVisibility('private'); setHasUnsavedChanges(true); }}>
+                  <Lock className="w-4 h-4 mr-2" />Riêng tư
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setVisibility('public'); setHasUnsavedChanges(true); }}>
+                  <Globe className="w-4 h-4 mr-2 text-blue-500" />Công khai
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setVisibility('pinned'); setHasUnsavedChanges(true); }}>
+                  <Star className="w-4 h-4 mr-2 text-yellow-500" />Ghim
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
-            {/* Stage selector */}
-            <Select value={stageId || '_none'} onValueChange={(v) => { setStageId(v === '_none' ? '' : v); setHasUnsavedChanges(true); }}>
-              <SelectTrigger className="w-auto h-8 text-sm">
-                <Layers className="w-3 h-3 mr-1" />
-                <SelectValue placeholder="Giai đoạn" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">Không chọn</SelectItem>
-                {stages.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex-1" />
-
-            {/* Status */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {isAutoSaving && (
-                <span className="flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Đang lưu...
-                </span>
-              )}
-              {!isAutoSaving && hasUnsavedChanges && (
-                <span className="flex items-center gap-1 text-yellow-600">
-                  <Clock className="w-3 h-3" />
-                  Chưa lưu
-                </span>
-              )}
-              {!isAutoSaving && !hasUnsavedChanges && lastSaved && !isCreating && (
-                <span className="flex items-center gap-1 text-green-600">
-                  <Check className="w-3 h-3" />
-                  Đã lưu
-                </span>
-              )}
-            </div>
-
-            {/* History button */}
-            {!isCreating && selectedNote && (
-              <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    <History className="w-4 h-4" />
-                    Lịch sử
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Lịch sử chỉnh sửa</DialogTitle>
-                  </DialogHeader>
-                  <ScrollArea className="max-h-[400px]">
-                    {history.length > 0 ? (
-                      <div className="space-y-2">
-                        {history.map((item) => (
-                          <div
-                            key={item.id}
-                            className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-                            onClick={() => handleRestoreVersion(item)}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium text-sm truncate">{item.title}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {format(new Date(item.saved_at), 'dd/MM HH:mm', { locale: vi })}
-                              </span>
-                            </div>
-                            {item.change_summary && (
-                              <p className="text-xs text-muted-foreground">{item.change_summary}</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center text-muted-foreground py-8">Chưa có lịch sử</p>
-                    )}
-                  </ScrollArea>
-                </DialogContent>
-              </Dialog>
-            )}
-
-            {/* Save button */}
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving || !title.trim()}
-              className="gap-2"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Lưu
-            </Button>
-          </div>
-        </div>
-
-        {/* Editor content - 100% for writing */}
-        <div className="flex-1 overflow-auto bg-background">
-          <div className="max-w-4xl mx-auto py-8 px-6">
-            {/* Title */}
-            <Input
-              value={title}
-              onChange={e => { setTitle(e.target.value); setHasUnsavedChanges(true); }}
-              placeholder="Tiêu đề ghi chú..."
-              className="text-3xl font-bold h-16 border-none shadow-none focus-visible:ring-0 px-0 placeholder:text-muted-foreground/40 mb-4"
-            />
-
-            {/* Tags */}
-            <div className="flex flex-wrap items-center gap-2 mb-6">
-              {tags.map((tag, index) => (
-                <Badge key={index} variant="secondary" className="gap-1">
-                  <Tag className="w-3 h-3" />
-                  {tag}
-                  <button 
-                    onClick={() => { setTags(tags.filter((_, i) => i !== index)); setHasUnsavedChanges(true); }} 
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </Badge>
+          {/* Stage selector */}
+          <Select value={stageId || '_none'} onValueChange={(v) => { setStageId(v === '_none' ? '' : v); setHasUnsavedChanges(true); }}>
+            <SelectTrigger className="w-auto h-8 text-sm">
+              <Layers className="w-3 h-3 mr-1" />
+              <SelectValue placeholder="Giai đoạn" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">Không chọn</SelectItem>
+              {stages.map(s => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
               ))}
-              <div className="flex gap-1">
-                <Input
-                  value={newTag}
-                  onChange={e => setNewTag(e.target.value)}
-                  placeholder="Thêm tag..."
-                  className="h-7 w-28 text-xs"
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                />
-                <Button size="sm" variant="ghost" onClick={addTag} className="h-7 px-2">
+            </SelectContent>
+          </Select>
+
+          <Separator orientation="vertical" className="h-6" />
+
+          {/* Tags in top bar */}
+          <div className="flex items-center gap-1 flex-wrap">
+            {tags.slice(0, 3).map((tag, index) => (
+              <Badge key={index} variant="secondary" className="gap-1 text-xs">
+                <Tag className="w-2.5 h-2.5" />
+                {tag}
+                <button 
+                  onClick={() => { setTags(tags.filter((_, i) => i !== index)); setHasUnsavedChanges(true); }} 
+                  className="ml-0.5 hover:text-destructive"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </Badge>
+            ))}
+            {tags.length > 3 && (
+              <Badge variant="outline" className="text-xs">+{tags.length - 3}</Badge>
+            )}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1">
+                  <Tag className="w-3 h-3" />
                   <Plus className="w-3 h-3" />
                 </Button>
-              </div>
-            </div>
-
-            {/* Editor */}
-            <NoteEditor
-              content={content}
-              onChange={handleContentChange}
-              placeholder="Bắt đầu viết ghi chú của bạn..."
-            />
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" align="start">
+                <div className="flex gap-1">
+                  <Input
+                    value={newTag}
+                    onChange={e => setNewTag(e.target.value)}
+                    placeholder="Thêm tag..."
+                    className="h-7 text-xs"
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                  />
+                  <Button size="sm" onClick={addTag} className="h-7 px-2">
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
+
+          <div className="flex-1" />
+
+          {/* Status */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {isAutoSaving && (
+              <span className="flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span className="hidden sm:inline">Đang lưu...</span>
+              </span>
+            )}
+            {!isAutoSaving && hasUnsavedChanges && (
+              <span className="flex items-center gap-1 text-yellow-600">
+                <Clock className="w-3 h-3" />
+                <span className="hidden sm:inline">Chưa lưu</span>
+              </span>
+            )}
+            {!isAutoSaving && !hasUnsavedChanges && lastSaved && !isCreating && (
+              <span className="flex items-center gap-1 text-green-600">
+                <Check className="w-3 h-3" />
+                <span className="hidden sm:inline">Đã lưu</span>
+              </span>
+            )}
+          </div>
+
+          {/* History button */}
+          {!isCreating && selectedNote && (
+            <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <History className="w-4 h-4" />
+                  <span className="hidden sm:inline">Lịch sử</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Lịch sử chỉnh sửa</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="max-h-[400px]">
+                  {history.length > 0 ? (
+                    <div className="space-y-2">
+                      {history.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                          onClick={() => handleRestoreVersion(item)}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-sm truncate">{item.title}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(item.saved_at), 'dd/MM HH:mm', { locale: vi })}
+                            </span>
+                          </div>
+                          {item.change_summary && (
+                            <p className="text-xs text-muted-foreground">{item.change_summary}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">Chưa có lịch sử</p>
+                  )}
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Save button */}
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+            className="gap-2"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Lưu
+          </Button>
+        </div>
+
+        {/* Title bar */}
+        <div className="px-4 py-3 border-b bg-background">
+          <Input
+            value={title}
+            onChange={e => { setTitle(e.target.value); setHasUnsavedChanges(true); }}
+            placeholder="Tiêu đề ghi chú..."
+            className="text-2xl font-bold h-12 border-none shadow-none focus-visible:ring-0 px-0 placeholder:text-muted-foreground/40 max-w-4xl mx-auto"
+          />
+        </div>
+
+        {/* Editor - Full screen with A4 page simulation */}
+        <div className="flex-1 overflow-hidden">
+          <NoteEditor
+            content={content}
+            onChange={handleContentChange}
+            placeholder="Bắt đầu viết ghi chú của bạn..."
+            isFullScreen={true}
+          />
         </div>
       </div>
     );
