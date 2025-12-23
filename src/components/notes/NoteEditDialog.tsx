@@ -244,12 +244,12 @@ export default function NoteEditDialog({
                 
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Giai đoạn</Label>
-                  <Select value={stageId} onValueChange={(v) => { setStageId(v); setTaskId(''); setHasChanges(true); }}>
+                  <Select value={stageId || '_none'} onValueChange={(v) => { setStageId(v === '_none' ? '' : v); setTaskId(''); setHasChanges(true); }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn giai đoạn" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Không chọn</SelectItem>
+                      <SelectItem value="_none">Không chọn</SelectItem>
                       {stages.map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                       ))}
@@ -259,12 +259,12 @@ export default function NoteEditDialog({
 
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Task</Label>
-                  <Select value={taskId} onValueChange={(v) => { setTaskId(v); setHasChanges(true); }}>
+                  <Select value={taskId || '_none'} onValueChange={(v) => { setTaskId(v === '_none' ? '' : v); setHasChanges(true); }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn task" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Không chọn</SelectItem>
+                      <SelectItem value="_none">Không chọn</SelectItem>
                       {filteredTasks.map(t => (
                         <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
                       ))}
