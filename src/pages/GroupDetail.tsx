@@ -21,7 +21,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Loader2, ArrowLeft, Layers, LayoutDashboard, Trash2, Settings, Activity } from 'lucide-react';
+import { Plus, Users, Loader2, ArrowLeft, Layers, LayoutDashboard, Trash2, Settings, Activity, StickyNote } from 'lucide-react';
+import NotesPage from '@/components/notes/NotesPage';
 import type { Group, GroupMember, Task, Profile, Stage } from '@/types/database';
 
 interface ExtendedGroup extends Group {
@@ -216,6 +217,7 @@ export default function GroupDetail() {
               <TabsTrigger value="tasks" className="gap-2"><Layers className="w-4 h-4" />Task & Giai đoạn</TabsTrigger>
               <TabsTrigger value="members" className="gap-2"><Users className="w-4 h-4" />Thành viên ({members.length})</TabsTrigger>
               <TabsTrigger value="logs" className="gap-2"><Activity className="w-4 h-4" />Nhật ký</TabsTrigger>
+              <TabsTrigger value="notes" className="gap-2"><StickyNote className="w-4 h-4" />Ghi chú</TabsTrigger>
               {isLeaderInGroup && group.created_by === user?.id && <TabsTrigger value="settings" className="gap-2"><Settings className="w-4 h-4" />Cài đặt</TabsTrigger>}
             </TabsList>
 
@@ -416,6 +418,10 @@ export default function GroupDetail() {
 
           <TabsContent value="logs" className="mt-6">
             <ProjectActivityLog groupId={groupId!} />
+          </TabsContent>
+
+          <TabsContent value="notes" className="mt-6">
+            <NotesPage groupId={groupId!} stages={stages} tasks={tasks} members={members} />
           </TabsContent>
 
           {isLeaderInGroup && group.created_by === user?.id && (
