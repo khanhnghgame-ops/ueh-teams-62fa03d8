@@ -22,7 +22,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Users, Loader2, ArrowLeft, Layers, LayoutDashboard, Trash2, Settings, Activity, StickyNote } from 'lucide-react';
-import NotesPage from '@/components/notes/NotesPage';
 import type { Group, GroupMember, Task, Profile, Stage } from '@/types/database';
 
 interface ExtendedGroup extends Group {
@@ -421,7 +420,23 @@ export default function GroupDetail() {
           </TabsContent>
 
           <TabsContent value="notes" className="mt-6">
-            <NotesPage groupId={groupId!} stages={stages} tasks={tasks} members={members} />
+            <Card>
+              <CardContent className="py-12 text-center">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <StickyNote className="w-8 h-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Ghi chú dự án</h3>
+                <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                  Trang ghi chú đầy đủ với trình soạn thảo nâng cao, bộ lọc và nhiều tính năng hơn.
+                </p>
+                <Link to={`/groups/${groupId}/notes`}>
+                  <Button size="lg">
+                    <StickyNote className="w-5 h-5 mr-2" />
+                    Mở trang Ghi chú
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {isLeaderInGroup && group.created_by === user?.id && (
